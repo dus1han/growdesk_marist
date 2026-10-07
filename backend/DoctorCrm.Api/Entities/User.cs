@@ -24,5 +24,12 @@ public class User : AuditableEntity
     /// </summary>
     public bool MustChangePassword { get; set; }
 
+    /// <summary>
+    /// Runs the GrowDesk platform for this clinic (e.g. the vendor's own staff): may configure
+    /// Stripe billing. Not a role, and never granted from the app: set by migration or seed only.
+    /// Only another owner can edit, reset or deactivate an owner's account.
+    /// </summary>
+    public bool IsPlatformOwner { get; set; }
+
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

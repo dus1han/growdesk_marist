@@ -2,6 +2,8 @@ import {
   Ban,
   Bot,
   ClipboardType,
+  CreditCard,
+  KeyRound,
   Layers,
   Megaphone,
   PanelTop,
@@ -31,5 +33,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: "/administration/whatsapp-bot", title: "WhatsApp BOT", description: "Opening hours and the bot's connection for leads and bookings", icon: Bot, permission: Permission.SettingsManage },
   { href: "/administration/cancellation-reasons", title: "Cancellation Reasons", description: "Reasons offered when cancelling a booking", icon: Ban, permission: Permission.SettingsManage },
   { href: "/administration/payment-methods", title: "Payment Methods", description: "Cash, card, bank transfer and others", icon: Wallet, permission: Permission.SettingsManage },
+  { href: "/administration/subscription", title: "Subscription", description: "Your GrowDesk plan, card on file and payment history", icon: CreditCard, permission: Permission.BillingManage },
+  { href: "/administration/stripe-settings", title: "Stripe Settings", description: "Platform owners: Stripe keys, plan price and grace period", icon: KeyRound, permission: Permission.PlatformBilling },
   { href: "/administration/audit-log", title: "Audit Log", description: "Who did what and when: sign-ins, changes and settings", icon: ScrollText, permission: Permission.AuditView },
 ];

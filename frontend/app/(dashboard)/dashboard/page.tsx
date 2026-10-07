@@ -3,6 +3,7 @@
 import { CircleAlert, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { BookingDetailsDrawer } from "@/components/bookings/booking-details-drawer";
+import { SubscriptionBanner } from "@/components/billing/subscription-banner";
 import { BookingFormDrawer } from "@/components/bookings/booking-form-drawer";
 import { FollowUps, RecentActivity, StageSummary, TodaysAppointments } from "@/components/dashboard/dashboard-sections";
 import { StatCards } from "@/components/dashboard/stat-cards";
@@ -38,6 +39,8 @@ export default function DashboardPage() {
         title={`${greeting()}, ${firstName}`}
         description={new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
       />
+
+      <SubscriptionBanner />
 
       {isError ? (
         <Card>

@@ -169,6 +169,8 @@ public class DbSeeder(AppDbContext db, IConfiguration config, ILogger<DbSeeder> 
             Username = username,
             NormalizedUsername = AuthService.NormalizeUsername(username),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12),
+            // Whoever deploys GrowDesk runs the platform: the first admin may configure billing.
+            IsPlatformOwner = true,
         };
         user.UserRoles.Add(new UserRole { Role = adminRole });
         db.Users.Add(user);

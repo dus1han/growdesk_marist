@@ -209,6 +209,17 @@ builder.Services.AddScoped<BookingHoursService>();
 builder.Services.AddScoped<BotService>();
 builder.Services.AddScoped<CalendarBlockService>();
 builder.Services.AddSingleton<LiveEvents>();
+
+// ---- Platform subscription (Stripe) ------------------------------------------------
+builder.Services.AddOptions<BillingOptions>().BindConfiguration(BillingOptions.Section);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<SecretProtector>();
+builder.Services.AddSingleton<BillingConfigStore>();
+builder.Services.AddSingleton<BillingAccessCache>();
+builder.Services.AddSingleton<IBillingGateway, StripeBillingGateway>();
+builder.Services.AddScoped<BillingService>();
+builder.Services.AddScoped<BillingSettingsService>();
+builder.Services.AddHostedService<BillingWorker>();
 builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
 
 builder.Services.AddControllers(o => o.Filters.Add<ValidationFilter>())
@@ -257,6 +268,7 @@ if (app.Environment.IsDevelopment())
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<PasswordChangeGate>();
+app.UseMiddleware<SubscriptionGate>();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -1,4 +1,5 @@
 using DoctorCrm.Api.Authentication;
+using DoctorCrm.Api.Authorization;
 using DoctorCrm.Api.Data;
 using DoctorCrm.Api.DTOs;
 using DoctorCrm.Api.Entities;
@@ -53,6 +54,7 @@ public class AuthService(AppDbContext db, TokenService tokens, AuditService audi
                 u.Username,
                 u.Email,
                 u.MustChangePassword,
+                u.IsPlatformOwner,
                 Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList(),
                 Permissions = u.UserRoles
                     .SelectMany(ur => ur.Role.RolePermissions)
@@ -62,9 +64,9 @@ public class AuthService(AppDbContext db, TokenService tokens, AuditService audi
             })
             .SingleOrDefaultAsync(ct);
 
-        return user is null
-            ? null
-            : new CurrentUserDto(user.Id, user.FullName, user.Username, user.Email, user.Roles, user.Permissions.Order().ToList(), user.MustChangePassword);
+        if (user is null) return null;
+        var permissions = user.IsPlatformOwner ? user.Permissions.Append(Permissions.PlatformBilling) : user.Permissions;
+        return new CurrentUserDto(user.Id, user.FullName, user.Username, user.Email, user.Roles, permissions.Order().ToList(), user.MustChangePassword);
     }
 
     /// <summary>Usernames are unique regardless of case: "dev_admin" and "Dev_Admin" are the same account.</summary>

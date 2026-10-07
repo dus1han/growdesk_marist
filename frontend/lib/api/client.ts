@@ -6,6 +6,9 @@ export const UNAUTHORIZED_EVENT = "growdesk:unauthorized";
 /** Dispatched when the API refuses a call until the user changes their password (backend PasswordChangeGate). */
 export const PASSWORD_CHANGE_EVENT = "growdesk:password-change-required";
 
+/** Dispatched when the API refuses a call because the subscription is unpaid (backend SubscriptionGate). */
+export const SUBSCRIPTION_BLOCKED_EVENT = "growdesk:subscription-blocked";
+
 const FRIENDLY_FALLBACK = "Something went wrong. Please try again.";
 
 export class ApiError extends Error {
@@ -66,6 +69,10 @@ async function request<T>(method: Method, path: string, options: RequestOptions 
     typeof window !== "undefined"
   ) {
     window.dispatchEvent(new Event(PASSWORD_CHANGE_EVENT));
+  }
+
+  if (response.status === 402 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(SUBSCRIPTION_BLOCKED_EVENT));
   }
 
   if (!response.ok || !envelope?.success) {

@@ -62,6 +62,7 @@ public class UserService(AppDbContext db, AuditService audit)
     public async Task<UserDto> UpdateAsync(int id, UpdateUserRequest request, int? actorId, CancellationToken ct)
     {
         var user = await FindAsync(id, ct);
+        await EnsureMayManageAsync(user, actorId, ct);
         var username = request.Username.Trim();
         await EnsureUsernameIsFreeAsync(username, id, ct);
         var role = await FindRoleAsync(request.RoleId, ct);
@@ -90,6 +91,7 @@ public class UserService(AppDbContext db, AuditService audit)
     public async Task<UserDto> SetActiveAsync(int id, bool isActive, int? actorId, CancellationToken ct)
     {
         var user = await FindAsync(id, ct);
+        await EnsureMayManageAsync(user, actorId, ct);
         if (!isActive)
         {
             if (id == actorId)
@@ -110,6 +112,7 @@ public class UserService(AppDbContext db, AuditService audit)
     public async Task ResetPasswordAsync(int id, string newPassword, int? actorId, CancellationToken ct)
     {
         var user = await FindAsync(id, ct);
+        await EnsureMayManageAsync(user, actorId, ct);
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: 12);
         user.MustChangePassword = true;
         audit.Record(actorId, "Password Reset", nameof(User), id, new { user.Username });
@@ -129,7 +132,20 @@ public class UserService(AppDbContext db, AuditService audit)
         u.IsActive,
         u.MustChangePassword,
         u.LastLoginAt,
-        u.CreatedAt);
+        u.CreatedAt,
+        u.IsPlatformOwner);
+
+    /// <summary>
+    /// A platform owner's account can only be changed by an owner (themselves included). Otherwise
+    /// a clinic admin could reset an owner's password, sign in as them and switch billing off.
+    /// </summary>
+    private async Task EnsureMayManageAsync(User target, int? actorId, CancellationToken ct)
+    {
+        if (!target.IsPlatformOwner || target.Id == actorId) return;
+        if (actorId is not null && await db.Users.AnyAsync(u => u.Id == actorId && u.IsPlatformOwner, ct)) return;
+        throw new BusinessRuleException("This account belongs to a GrowDesk platform owner. Only a platform owner can change it.",
+            StatusCodes.Status403Forbidden);
+    }
 
     private async Task<User> FindAsync(int id, CancellationToken ct) =>
         await db.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role).SingleOrDefaultAsync(u => u.Id == id, ct)

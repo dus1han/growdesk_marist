@@ -11,7 +11,7 @@ using Testcontainers.PostgreSql;
 namespace DoctorCrm.Tests;
 
 /// <summary>Runs the real API against a throwaway PostgreSQL container.</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string AdminUsername = "Test_Admin";
     public const string AdminPassword = "Test-Password-123";
@@ -36,6 +36,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Seed:AdminPassword", AdminPassword);
         // Every test signs in; the production limit of 10 per minute would throttle the suite.
         builder.UseSetting("RateLimiting:LoginPerMinute", "1000");
+        // As docker-compose passes it when unset.
+        builder.UseSetting("Billing:AppUrl", "");
     }
 
     public HttpClient CreateCookieClient() =>

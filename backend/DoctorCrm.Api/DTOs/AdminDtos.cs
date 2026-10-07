@@ -35,7 +35,8 @@ public record UserDto(
     bool IsActive,
     bool MustChangePassword,
     DateTime? LastLoginAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool IsPlatformOwner = false);
 
 public record CreateUserRequest(string FullName, string Username, string? Email, int RoleId, string Password);
 

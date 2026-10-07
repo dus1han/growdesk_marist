@@ -17,6 +17,9 @@ export const Permission = {
   UsersManage: "admin.users",
   SettingsManage: "admin.settings",
   AuditView: "admin.audit",
+  BillingManage: "admin.billing",
+  /** Platform owners only (never part of a role): Stripe Settings. */
+  PlatformBilling: "platform.billing",
 } as const;
 
 export type PermissionKey = (typeof Permission)[keyof typeof Permission];

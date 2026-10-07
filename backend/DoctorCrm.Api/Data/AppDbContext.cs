@@ -28,6 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BookingTreatment> BookingTreatments => Set<BookingTreatment>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CaptureClient> CaptureClients => Set<CaptureClient>();
+    public DbSet<BillingAccount> BillingAccounts => Set<BillingAccount>();
+    public DbSet<BillingSettings> BillingSettings => Set<BillingSettings>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -207,6 +209,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Reason).HasMaxLength(200);
             e.HasIndex(x => new { x.StartDate, x.EndDate });
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<BillingAccount>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.StripeCustomerId).HasMaxLength(100);
+            e.Property(x => x.StripeSubscriptionId).HasMaxLength(100);
+            e.Property(x => x.SubscriptionStatus).HasMaxLength(30);
+            e.Property(x => x.PlanCurrency).HasMaxLength(3);
+            e.Property(x => x.PlanInterval).HasMaxLength(10);
+            e.Property(x => x.CardBrand).HasMaxLength(30);
+            e.Property(x => x.CardLast4).HasMaxLength(4);
+            e.Property(x => x.UnpaidInvoiceId).HasMaxLength(100);
+            e.Property(x => x.UnpaidCurrency).HasMaxLength(3);
+            e.Property(x => x.UnpaidInvoiceUrl).HasMaxLength(500);
+            e.Property(x => x.FinalRetryError).HasMaxLength(500);
+        });
+
+        b.Entity<BillingSettings>(e =>
+        {
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.SecretKeyProtected).HasMaxLength(1000);
+            e.Property(x => x.SecretKeyHint).HasMaxLength(40);
+            e.Property(x => x.WebhookSecretProtected).HasMaxLength(1000);
+            e.Property(x => x.PriceId).HasMaxLength(100);
         });
 
         b.Entity<CaptureClient>(e =>

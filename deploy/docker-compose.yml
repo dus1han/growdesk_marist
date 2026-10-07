@@ -48,6 +48,9 @@ services:
       Jwt__Key: ${JWT_KEY}
       # Plain HTTP on ip:port: a Secure cookie would be dropped by the browser. Set true behind TLS.
       AuthCookie__Secure: ${COOKIE_SECURE:-false}
+      # Public address for Stripe's return links and webhook URL (e.g. https://crm.example.com).
+      # Stripe itself is configured by a platform owner in Administration → Stripe Settings.
+      Billing__AppUrl: ${APP_URL:-}
       Seed__AdminUsername: ${SEED_ADMIN_USERNAME:-}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
     logging: *logging

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CircleAlert, Eye, EyeOff, KeyRound, Pencil, Plus, RotateCcw, UserCog } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, KeyRound, Lock, Pencil, Plus, RotateCcw, ShieldCheck, UserCog } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import { ApiError } from "@/lib/api/client";
 import { isStrongPassword, PASSWORD_MESSAGE } from "@/lib/auth/password";
 import { useSession } from "@/lib/auth/session";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import { Permission } from "@/lib/permissions";
+import { can, Permission } from "@/lib/permissions";
 import { cn, initials } from "@/lib/utils";
 import type { AdminUser } from "@/types/admin";
 
@@ -112,6 +112,8 @@ export default function UsersPage() {
           <ul className="divide-y divide-line">
             {users.map((u) => {
               const isSelf = u.id === session?.user.id;
+              // Mirrors the API: only a platform owner can change a platform owner's account.
+              const locked = u.isPlatformOwner && !isSelf && !can(session?.user, Permission.PlatformBilling);
               return (
                 <li key={u.id} className={cn("flex flex-wrap items-center gap-x-4 gap-y-2 p-4 transition-colors hover:bg-surface-muted/40", !u.isActive && "bg-surface-muted/40")}>
                   <div className="flex min-w-0 flex-1 basis-60 items-center gap-3">
@@ -137,6 +139,11 @@ export default function UsersPage() {
 
                   <div className="flex items-center gap-2">
                     {u.roleName && <Badge tone={ROLE_TONES[u.roleName] ?? "neutral"}>{u.roleName}</Badge>}
+                    {u.isPlatformOwner && (
+                      <Badge tone="brand">
+                        <ShieldCheck className="size-3" /> Platform owner
+                      </Badge>
+                    )}
                     {!u.isActive && <Badge tone="muted">Inactive</Badge>}
                     {u.isActive && u.mustChangePassword && (
                       <Badge tone="warning" className="hidden sm:inline-flex">
@@ -150,39 +157,45 @@ export default function UsersPage() {
                     {formatRelative(u.lastLoginAt, "Never signed in")}
                   </p>
 
-                  <div className="ml-auto flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setResetting(u)}
-                      aria-label={`Reset password for ${u.fullName}`}
-                      title="Reset password"
-                      className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
-                    >
-                      <KeyRound className="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(u)}
-                      aria-label={`Edit ${u.fullName}`}
-                      title="Edit"
-                      className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
-                    >
-                      <Pencil className="size-4" />
-                    </button>
-                    <span className="ml-1 flex" title={isSelf ? "You can't deactivate your own account." : undefined}>
-                      <Switch
-                        checked={u.isActive}
-                        disabled={isSelf || setActive.isPending}
-                        onCheckedChange={(isActive) =>
-                          setActive.mutate(
-                            { id: u.id, isActive },
-                            { onSuccess: () => toast.success(`${u.fullName} ${isActive ? "can sign in again" : "can no longer sign in"}`) },
-                          )
-                        }
-                        label={u.isActive ? `Deactivate ${u.fullName}` : `Activate ${u.fullName}`}
-                      />
-                    </span>
-                  </div>
+                  {locked ? (
+                    <p className="ml-auto flex items-center gap-1.5 text-xs text-muted" title="Only a platform owner can change this account.">
+                      <Lock className="size-3.5" /> Managed by GrowDesk
+                    </p>
+                  ) : (
+                    <div className="ml-auto flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setResetting(u)}
+                        aria-label={`Reset password for ${u.fullName}`}
+                        title="Reset password"
+                        className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
+                      >
+                        <KeyRound className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(u)}
+                        aria-label={`Edit ${u.fullName}`}
+                        title="Edit"
+                        className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
+                      >
+                        <Pencil className="size-4" />
+                      </button>
+                      <span className="ml-1 flex" title={isSelf ? "You can't deactivate your own account." : undefined}>
+                        <Switch
+                          checked={u.isActive}
+                          disabled={isSelf || setActive.isPending}
+                          onCheckedChange={(isActive) =>
+                            setActive.mutate(
+                              { id: u.id, isActive },
+                              { onSuccess: () => toast.success(`${u.fullName} ${isActive ? "can sign in again" : "can no longer sign in"}`) },
+                            )
+                          }
+                          label={u.isActive ? `Deactivate ${u.fullName}` : `Activate ${u.fullName}`}
+                        />
+                      </span>
+                    </div>
+                  )}
                 </li>
               );
             })}

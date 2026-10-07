@@ -33,6 +33,8 @@ export interface AdminUser {
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  /** Runs the GrowDesk platform: may configure Stripe. Only another owner can change this account. */
+  isPlatformOwner: boolean;
 }
 
 export interface CreateUser {

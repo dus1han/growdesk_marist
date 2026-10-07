@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PASSWORD_CHANGE_EVENT, UNAUTHORIZED_EVENT } from "@/lib/api/client";
+import { billingKeys, useBillingNotice } from "@/lib/api/billing";
+import { PASSWORD_CHANGE_EVENT, SUBSCRIPTION_BLOCKED_EVENT, UNAUTHORIZED_EVENT } from "@/lib/api/client";
 import { sessionQueryKey, useSession } from "@/lib/auth/session";
 import { can, Permission } from "@/lib/permissions";
 import { LiveBookings } from "./live-bookings";
@@ -18,7 +19,8 @@ const COLLAPSE_KEY = "growdesk.sidebar.collapsed";
 /**
  * Authenticated layout. Owns the session lifecycle for every app page: shows a skeleton while
  * the session loads, sends signed-out users to /login, and ends the session when the API
- * answers 401 or the session's expiry time passes.
+ * answers 401 or the session's expiry time passes. While the subscription is unpaid past its grace
+ * period, everyone is sent to the payment page instead.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -68,6 +70,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(PASSWORD_CHANGE_EVENT, onPasswordChange);
   }, [queryClient]);
 
+  // Unpaid past the grace period: the app is paused, only the payment page works. Checked on
+  // every app load (so signing in lands there) and whenever the API answers 402 mid-session.
+  const { data: billing } = useBillingNotice(!!session);
+  const blocked = !!billing?.blocked && !mustChangePassword;
+  useEffect(() => {
+    if (blocked) router.replace("/subscription-required");
+  }, [blocked, router]);
+
+  useEffect(() => {
+    const onBlocked = () => void queryClient.invalidateQueries({ queryKey: billingKeys.notice });
+    window.addEventListener(SUBSCRIPTION_BLOCKED_EVENT, onBlocked);
+    return () => window.removeEventListener(SUBSCRIPTION_BLOCKED_EVENT, onBlocked);
+  }, [queryClient]);
+
   // Any API call answering 401 ends the session.
   useEffect(() => {
     const onUnauthorized = () => endSession("Your session has expired. Please sign in again.");
@@ -83,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [session, endSession]);
 
-  if (isPending || !session || mustChangePassword) return <ShellSkeleton />;
+  if (isPending || !session || mustChangePassword || blocked) return <ShellSkeleton />;
 
   return (
     <div className="flex min-h-dvh">

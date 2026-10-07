@@ -55,6 +55,7 @@ public class AuthController(AuthService auth, IOptions<AuthCookieOptions> cookie
     [HttpPost("change-password")]
     [Authorize]
     [AllowWhilePasswordChangeRequired]
+    [AllowWhileSubscriptionBlocked]
     [EnableRateLimiting(RateLimitPolicies.Login)]
     public async Task<ActionResult<ApiResponse<SessionDto>>> ChangePassword(ChangePasswordRequest request, CancellationToken ct)
     {
@@ -69,6 +70,7 @@ public class AuthController(AuthService auth, IOptions<AuthCookieOptions> cookie
     [HttpGet("me")]
     [Authorize]
     [AllowWhilePasswordChangeRequired]
+    [AllowWhileSubscriptionBlocked]
     public async Task<ActionResult<ApiResponse<SessionDto>>> Me(CancellationToken ct)
     {
         if (!TryGetUserId(out var userId))

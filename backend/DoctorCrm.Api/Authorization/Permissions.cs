@@ -22,6 +22,7 @@ public static class Permissions
     public const string UsersManage = "admin.users";
     public const string SettingsManage = "admin.settings";
     public const string AuditView = "admin.audit";
+    public const string BillingManage = "admin.billing";
 
     public static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>
     {
@@ -37,9 +38,17 @@ public static class Permissions
         [UsersManage] = "Manage users",
         [SettingsManage] = "Manage treatments, stages, fields and settings",
         [AuditView] = "View the audit log",
+        [BillingManage] = "Manage and pay the GrowDesk subscription",
     };
 
     public static IEnumerable<string> All => Descriptions.Keys;
+
+    /// <summary>
+    /// Configure Stripe billing. Deliberately not a role permission (so the clinic's Admin role,
+    /// which receives every permission above, never gets it): held only by platform owners
+    /// (<see cref="Entities.User.IsPlatformOwner"/>) and added to their session at sign-in.
+    /// </summary>
+    public const string PlatformBilling = "platform.billing";
 }
 
 public static class Roles
