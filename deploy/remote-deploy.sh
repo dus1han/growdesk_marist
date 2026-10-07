@@ -3,7 +3,7 @@
 # Runs ON THE VPS, piped in over stdin by .github/workflows/deploy.yml. Can also be run by hand
 # when a deploy fails:
 #
-#   ssh deploy@<host> 'SITE_PATH=/home/deploy/sites/growdesk_asal bash -s' < deploy/remote-deploy.sh
+#   ssh deploy@<host> 'SITE_PATH=/home/deploy/sites/growdesk_marist bash -s' < deploy/remote-deploy.sh
 #
 set -uo pipefail
 

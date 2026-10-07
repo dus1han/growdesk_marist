@@ -1,4 +1,4 @@
-# GrowDesk stack on the VPS, at /home/deploy/sites/growdesk_asal.
+# GrowDesk stack on the VPS, at /home/deploy/sites/growdesk_marist.
 #
 # Shipped to the server by .github/workflows/deploy.yml on every deploy, so changes here always
 # arrive. The server's .env (never in git) holds the passwords, keys, image names and ports.
@@ -14,7 +14,7 @@
 services:
   db:
     image: postgres:18
-    container_name: growdesk_asal-db
+    container_name: growdesk_marist-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -24,7 +24,7 @@ services:
     ports:
       - '127.0.0.1:${DB_PORT}:5432'
     volumes:
-      - growdesk_asal_pgdata:/var/lib/postgresql
+      - growdesk_marist_pgdata:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
       interval: 10s
@@ -38,7 +38,7 @@ services:
 
   api:
     image: ${API_IMAGE}
-    container_name: growdesk_asal-api
+    container_name: growdesk_marist-api
     restart: unless-stopped
     depends_on:
       db:
@@ -54,7 +54,7 @@ services:
 
   web:
     image: ${WEB_IMAGE}
-    container_name: growdesk_asal-web
+    container_name: growdesk_marist-web
     restart: unless-stopped
     depends_on:
       - api
@@ -73,4 +73,4 @@ services:
     logging: *logging
 
 volumes:
-  growdesk_asal_pgdata:
+  growdesk_marist_pgdata:

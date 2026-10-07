@@ -25,10 +25,10 @@ The CRM is built in **8 milestones**. Each one ends with both apps building, mig
 | Item | Value |
 | --- | --- |
 | Product name | GrowDesk (code namespaces remain `DoctorCrm`) |
-| Repository | `git@github-personal:dus1han/growdesk_asal.git` (public) |
-| VPS stack | `/home/deploy/sites/growdesk_asal` (compose project `growdesk_asal`) |
-| Containers | `growdesk_asal-db`, `growdesk_asal-api`, `growdesk_asal-web` |
-| Database | PostgreSQL 18, database `growdesk_asal`, bound to `127.0.0.1:5440` on the VPS only |
+| Repository | `git@github-personal:dus1han/growdesk_marist.git` (public) |
+| VPS stack | `/home/deploy/sites/growdesk_marist` (compose project `growdesk_marist`) |
+| Containers | `growdesk_marist-db`, `growdesk_marist-api`, `growdesk_marist-web` |
+| Database | PostgreSQL 18, database `growdesk_marist`, bound to `127.0.0.1:5440` on the VPS only |
 | App URL | `http://169.58.92.105:3110` (plain HTTP until a domain + Caddy TLS) |
 | Dev database access | SSH tunnel: `ssh -N -L 5440:127.0.0.1:5440 deploy@169.58.92.105` |
 | Dev admin login | username `Dev_Admin` (accounts sign in with a username, not an email) |

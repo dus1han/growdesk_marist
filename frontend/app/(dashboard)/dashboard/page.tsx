@@ -1,11 +1,9 @@
 "use client";
 
-import { CircleAlert, Plus, RotateCcw } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { CircleAlert, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { BookingDetailsDrawer } from "@/components/bookings/booking-details-drawer";
 import { BookingFormDrawer } from "@/components/bookings/booking-form-drawer";
-import { CustomerFormDrawer } from "@/components/customers/customer-form-drawer";
 import { FollowUps, RecentActivity, StageSummary, TodaysAppointments } from "@/components/dashboard/dashboard-sections";
 import { StatCards } from "@/components/dashboard/stat-cards";
 import { PageHeader } from "@/components/layout/page-header";
@@ -28,9 +26,6 @@ export default function DashboardPage() {
   const { data, isPending, isError, refetch } = useDashboard();
   const [openBooking, setOpenBooking] = useState<number | null>(null);
   const [booking, setBooking] = useState(false);
-  const [addingCustomer, setAddingCustomer] = useState(false);
-  const router = useRouter();
-  const canAddCustomer = can(session?.user, Permission.CustomersManage);
   const firstName = session?.user.fullName.split(" ")[0] ?? "";
   const canBook = can(session?.user, Permission.BookingsManage);
 
@@ -42,13 +37,6 @@ export default function DashboardPage() {
       <PageHeader
         title={`${greeting()}, ${firstName}`}
         description={new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
-        actions={
-          canAddCustomer && (
-            <Button onClick={() => setAddingCustomer(true)}>
-              <Plus className="size-4" /> Add customer
-            </Button>
-          )
-        }
       />
 
       {isError ? (
@@ -92,9 +80,6 @@ export default function DashboardPage() {
       )}
 
       <BookingDetailsDrawer bookingId={openBooking} onClose={() => setOpenBooking(null)} onBookingChange={setOpenBooking} />
-      {canAddCustomer && (
-        <CustomerFormDrawer open={addingCustomer} onClose={() => setAddingCustomer(false)} onSaved={(c) => router.push(`/customers/${c.id}`)} />
-      )}
       {canBook && (
         <BookingFormDrawer
           open={booking}
