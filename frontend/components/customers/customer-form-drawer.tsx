@@ -43,11 +43,16 @@ const schema = z
   });
 type FormValues = z.infer<typeof schema>;
 
-/** Every customer saved from this form needs an interested treatment (backend CustomerService). */
-const formSchema = schema.refine((v) => v.treatmentIds.length > 0, {
-  path: ["treatmentIds"],
-  message: "Choose at least one interested treatment.",
-});
+/** Every customer saved from this form needs an interested treatment and a lead source (backend). */
+const formSchema = schema
+  .refine((v) => v.treatmentIds.length > 0, {
+    path: ["treatmentIds"],
+    message: "Choose at least one interested treatment.",
+  })
+  .refine((v) => v.leadSourceId !== null, {
+    path: ["leadSourceId"],
+    message: "Please choose a lead source.",
+  });
 
 /** Turns "" from a <select> into null and anything else into a number. */
 const idOrNull = (v: unknown) => (v === "" || v === null || v === undefined ? null : Number(v));
@@ -177,7 +182,7 @@ function CustomerForm({
         if (error.status === 409 && error.data) setDuplicate(error.data as DuplicateCustomer);
         for (const fe of error.fieldErrors) {
           if (!fe.field) continue;
-          if (["secondaryPhone", "email", "leadSourceId", "assignedUserId"].includes(fe.field) || fe.field.startsWith("customFields."))
+          if (["secondaryPhone", "email", "assignedUserId"].includes(fe.field) || fe.field.startsWith("customFields."))
             setShowMore(true);
           setError(fe.field as keyof FormValues, { message: fe.message });
         }
@@ -233,10 +238,10 @@ function CustomerForm({
           <Field label="WhatsApp" required hint="With its country code (e.g. +94…); UAE numbers work without it. For an Instagram-only lead, add the Instagram name under More details instead." error={errors.whatsApp?.message}>
             {(p) => <Input {...p} type="tel" inputMode="tel" placeholder="+971 50 123 4567" autoComplete="off" {...register("whatsApp")} />}
           </Field>
-          <Field label="Lead source" optional error={errors.leadSourceId?.message}>
+          <Field label="Lead source" required error={errors.leadSourceId?.message}>
             {(p) => (
               <Select {...p} {...register("leadSourceId", { setValueAs: idOrNull })}>
-                <option value="">Not set</option>
+                <option value="">Choose…</option>
                 {sources.data?.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}

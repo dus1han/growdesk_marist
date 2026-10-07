@@ -22,7 +22,7 @@ public class DashboardTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     private static SaveCustomerRequest Customer(string name, string whatsApp, int treatmentId, DateOnly? followUp) =>
-        new(name, whatsApp, null, null, null, null, null, null, [treatmentId], null, followUp, null, null);
+        new(name, whatsApp, null, null, null, null, 1, null, [treatmentId], null, followUp, null, null);
 
     [Fact]
     public async Task Dashboard_reflects_bookings_customers_follow_ups_and_activity()

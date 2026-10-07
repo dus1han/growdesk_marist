@@ -30,7 +30,7 @@ public class PaymentIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         var treatments = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/treatments"));
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
         var customer = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers",
-            new SaveCustomerRequest($"Payer {n}", $"054 {n + 3000000:0000000}", null, null, null, null, null, null, [treatments[0].Id], null, null, null, null)));
+            new SaveCustomerRequest($"Payer {n}", $"054 {n + 3000000:0000000}", null, null, null, null, 1, null, [treatments[0].Id], null, null, null, null)));
 
         async Task<int> CompleteAsync(int hour, decimal charge, string status, int? method)
         {

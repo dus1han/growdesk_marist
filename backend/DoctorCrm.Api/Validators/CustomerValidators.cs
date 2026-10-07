@@ -14,6 +14,7 @@ public class SaveCustomerRequestValidator : AbstractValidator<SaveCustomerReques
         RuleFor(x => x.Instagram).MaximumLength(100);
         RuleFor(x => x.Email).EmailAddress().WithMessage("Please enter a valid email address.").MaximumLength(254)
             .When(x => !string.IsNullOrWhiteSpace(x.Email));
+        RuleFor(x => x.LeadSourceId).NotNull().WithMessage("Please choose a lead source.");
         RuleFor(x => x.Notes).MaximumLength(4000);
         RuleFor(x => x)
             .Must(x => !string.IsNullOrWhiteSpace(x.WhatsApp) || !string.IsNullOrWhiteSpace(x.Instagram))

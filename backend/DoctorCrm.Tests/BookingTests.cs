@@ -39,7 +39,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         var treatments = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/treatments"));
         var n = Interlocked.Increment(ref _seq);
         var customer = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers",
-            new SaveCustomerRequest($"Booking Customer {n}", $"052 {n + 2000000:0000000}", null, null, null, null, null, null,
+            new SaveCustomerRequest($"Booking Customer {n}", $"052 {n + 2000000:0000000}", null, null, null, null, 1, null,
                 [treatments[0].Id], null, null, null, null)));
         return (customer, treatments);
     }
@@ -278,7 +278,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
     }
 
     [Fact]
-    public async Task Staff_can_view_bookings_but_not_book_or_complete()
+    public async Task Staff_can_view_and_complete_bookings_but_not_book()
     {
         var admin = await AdminAsync();
         var (customer, treatments) = await NewCustomerAsync(admin);
@@ -294,7 +294,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync($"/api/bookings/{booking.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync("/api/bookings",
             Book(customer.Id, NewDay(), T(9), T(9, 30), [treatments[0].Id]))).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
+        Assert.Equal(HttpStatusCode.OK, (await staff.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
             new CompleteBookingRequest(0, "Waived", null, null, null, null))).StatusCode);
     }
 
@@ -354,7 +354,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         var stages = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/stages"));
         var lost = stages.Single(x => x.SystemKey == "lost").Id;
         (await admin.PutAsJsonAsync($"/api/customers/{customer.Id}", new SaveCustomerRequest(customer.Name, customer.WhatsApp, null, null, null,
-            lost, null, null, [treatments[0].Id], null, null, null, null))).EnsureSuccessStatusCode();
+            lost, 1, null, [treatments[0].Id], null, null, null, null))).EnsureSuccessStatusCode();
 
         var booking = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, NewDay(), T(11), T(11, 30), [treatments[0].Id])));
         Assert.Equal("lost", (await CustomerAsync(admin, customer.Id)).Stage.SystemKey);

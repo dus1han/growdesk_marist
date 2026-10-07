@@ -63,15 +63,23 @@ public class CustomerIntegrationTests(ApiFactory factory) : IClassFixture<ApiFac
 
     private static SaveCustomerRequest Customer(string name, string? whatsApp = null, string? instagram = null,
         IReadOnlyList<int>? treatments = null, int? stageId = null, Dictionary<string, JsonElement>? customFields = null) =>
-        // Seeded treatment 1 by default: a new customer needs an interested treatment.
-        new(name, whatsApp, null, instagram, null, stageId, null, null, treatments ?? [1], null, null, null, customFields);
+        // Seeded treatment 1 and lead source 1 by default: a customer needs an interested treatment and a lead source.
+        new(name, whatsApp, null, instagram, null, stageId, 1, null, treatments ?? [1], null, null, null, customFields);
+
+    [Fact]
+    public async Task Lead_source_is_required()
+    {
+        var admin = await AdminAsync();
+        var response = await admin.PostAsJsonAsync("/api/customers", Customer("No Source", NewNumber()) with { LeadSourceId = null });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 
     [Fact]
     public async Task Treatments_are_required_and_cannot_be_emptied()
     {
         var admin = await AdminAsync();
         var none = await admin.PostAsJsonAsync("/api/customers",
-            new SaveCustomerRequest("No Treatment", NewNumber(), null, null, null, null, null, null, [], null, null, null, null));
+            new SaveCustomerRequest("No Treatment", NewNumber(), null, null, null, null, 1, null, [], null, null, null, null));
         Assert.Equal(HttpStatusCode.BadRequest, none.StatusCode);
         var body = await none.Content.ReadFromJsonAsync<ApiResponse<object>>();
         Assert.Equal("Choose at least one interested treatment.", body!.Message);
@@ -80,7 +88,7 @@ public class CustomerIntegrationTests(ApiFactory factory) : IClassFixture<ApiFac
         // An edit can change the interests but not remove them all.
         var created = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers", Customer("Has Treatment", NewNumber())));
         var cleared = await admin.PutAsJsonAsync($"/api/customers/{created.Id}",
-            new SaveCustomerRequest("Has Treatment", created.WhatsApp, null, null, null, null, null, null, [], null, null, null, null));
+            new SaveCustomerRequest("Has Treatment", created.WhatsApp, null, null, null, null, 1, null, [], null, null, null, null));
         Assert.Equal(HttpStatusCode.BadRequest, cleared.StatusCode);
 
         // A customer who never had one (captured without) can still be saved, e.g. a stage change.
@@ -96,7 +104,7 @@ public class CustomerIntegrationTests(ApiFactory factory) : IClassFixture<ApiFac
         }
         var followUp = (await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/stages"))).Single(s => s.SystemKey == "follow_up");
         var moved = await DataAsync<CustomerDetailDto>(await admin.PutAsJsonAsync($"/api/customers/{bare}",
-            new SaveCustomerRequest("Captured Bare", "+971500009999", null, null, null, followUp.Id, null, null, [], null, null, null, null)));
+            new SaveCustomerRequest("Captured Bare", "+971500009999", null, null, null, followUp.Id, 1, null, [], null, null, null, null)));
         Assert.Equal("follow_up", moved.Stage.SystemKey);
     }
 
