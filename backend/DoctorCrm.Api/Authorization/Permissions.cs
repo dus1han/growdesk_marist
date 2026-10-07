@@ -60,12 +60,13 @@ public static class Roles
         [Receptionist] =
         [
             Permissions.DashboardView, Permissions.CustomersView, Permissions.CustomersManage,
-            Permissions.BookingsView, Permissions.BookingsManage,
+            Permissions.BookingsView, Permissions.BookingsManage, Permissions.BookingsComplete,
             Permissions.PaymentsView, Permissions.PaymentsManage,
         ],
         [Staff] =
         [
             Permissions.DashboardView, Permissions.CustomersView, Permissions.BookingsView,
+            Permissions.BookingsComplete,
         ],
     };
 }
