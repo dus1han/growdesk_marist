@@ -95,7 +95,7 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
     {
         var bookings = await db.Bookings.AsNoTracking()
             .Where(b => customerIds.Contains(b.CustomerId) && b.Status != BookingStatus.Rescheduled)
-            .Select(b => new { b.CustomerId, b.Id, b.Status, b.BookingDate, b.StartTime, b.NextTreatmentDate })
+            .Select(b => new { b.CustomerId, b.Id, b.Status, b.BookingDate, b.StartTime, b.NextTreatmentDate, b.OriginalBookingId })
             .ToListAsync(ct);
 
         var result = new Dictionary<int, ConsultationDto>();
@@ -103,17 +103,21 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
         {
             var mine = bookings.Where(b => b.CustomerId == id).ToList();
             var booked = mine.Where(b => b.Status == BookingStatus.Booked)
-                .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime).FirstOrDefault();
+                .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime).ThenBy(b => b.Id).FirstOrDefault();
             var last = mine.Where(b => Finished.Contains(b.Status))
                 .OrderByDescending(b => b.BookingDate).ThenByDescending(b => b.StartTime).ThenByDescending(b => b.Id).FirstOrDefault();
 
             result[id] = booked is not null
-                ? new ConsultationDto(ConsultationStates.Booked, booked.Id, booked.BookingDate, booked.StartTime, null)
+                ? new ConsultationDto(booked.OriginalBookingId is null ? ConsultationStates.Booked : ConsultationStates.Rescheduled,
+                    booked.Id, booked.BookingDate, booked.StartTime, null)
                 : last is null
                     ? new ConsultationDto(ConsultationStates.None, null, null, null, null)
-                    : last.Status == BookingStatus.Completed
-                        ? new ConsultationDto(ConsultationStates.Consulted, last.Id, last.BookingDate, last.StartTime, last.NextTreatmentDate)
-                        : new ConsultationDto(ConsultationStates.Missed, last.Id, last.BookingDate, last.StartTime, null);
+                    : last.Status switch
+                    {
+                        BookingStatus.Completed => new ConsultationDto(ConsultationStates.Consulted, last.Id, last.BookingDate, last.StartTime, last.NextTreatmentDate),
+                        BookingStatus.Cancelled => new ConsultationDto(ConsultationStates.Cancelled, last.Id, last.BookingDate, last.StartTime, null),
+                        _ => new ConsultationDto(ConsultationStates.Missed, last.Id, last.BookingDate, last.StartTime, null),
+                    };
         }
         return result;
     }
@@ -124,23 +128,30 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
         var bookings = db.Bookings;
         return state?.Trim().ToLowerInvariant() switch
         {
-            ConsultationStates.Booked => query.Where(c => bookings.Any(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked)),
+            // Booked vs rescheduled: whether the earliest booked consultation replaced a rescheduled one.
+            ConsultationStates.Booked => query.Where(c => bookings.Where(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked)
+                .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime).ThenBy(b => b.Id)
+                .Select(b => (bool?)(b.OriginalBookingId == null)).FirstOrDefault() == true),
+            ConsultationStates.Rescheduled => query.Where(c => bookings.Where(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked)
+                .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime).ThenBy(b => b.Id)
+                .Select(b => (bool?)(b.OriginalBookingId == null)).FirstOrDefault() == false),
             ConsultationStates.None => query.Where(c => !bookings.Any(b => b.CustomerId == c.Id && b.Status != BookingStatus.Rescheduled)),
-            ConsultationStates.Consulted => query.Where(c =>
-                !bookings.Any(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked)
-                && bookings.Where(b => b.CustomerId == c.Id && Finished.Contains(b.Status))
-                    .OrderByDescending(b => b.BookingDate).ThenByDescending(b => b.StartTime).ThenByDescending(b => b.Id)
-                    .Select(b => (BookingStatus?)b.Status).FirstOrDefault() == BookingStatus.Completed),
-            ConsultationStates.Missed => query.Where(c =>
-                !bookings.Any(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked)
-                && (bookings.Where(b => b.CustomerId == c.Id && Finished.Contains(b.Status))
-                        .OrderByDescending(b => b.BookingDate).ThenByDescending(b => b.StartTime).ThenByDescending(b => b.Id)
-                        .Select(b => (BookingStatus?)b.Status).FirstOrDefault() == BookingStatus.Cancelled
-                    || bookings.Where(b => b.CustomerId == c.Id && Finished.Contains(b.Status))
-                        .OrderByDescending(b => b.BookingDate).ThenByDescending(b => b.StartTime).ThenByDescending(b => b.Id)
-                        .Select(b => (BookingStatus?)b.Status).FirstOrDefault() == BookingStatus.NoShow)),
+            ConsultationStates.Consulted => LastFinished(query, BookingStatus.Completed),
+            ConsultationStates.Cancelled => LastFinished(query, BookingStatus.Cancelled),
+            ConsultationStates.Missed => LastFinished(query, BookingStatus.NoShow),
             _ => query,
         };
+    }
+
+    /// <summary>Customers with nothing booked whose latest finished consultation ended with <paramref name="status"/>.</summary>
+    private IQueryable<Customer> LastFinished(IQueryable<Customer> query, BookingStatus status)
+    {
+        var bookings = db.Bookings;
+        return query.Where(c =>
+            !bookings.Any(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked)
+            && bookings.Where(b => b.CustomerId == c.Id && Finished.Contains(b.Status))
+                .OrderByDescending(b => b.BookingDate).ThenByDescending(b => b.StartTime).ThenByDescending(b => b.Id)
+                .Select(b => (BookingStatus?)b.Status).FirstOrDefault() == status);
     }
 
     public async Task<CustomerDetailDto> GetAsync(int id, CancellationToken ct)

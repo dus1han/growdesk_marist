@@ -19,7 +19,7 @@ export interface Paged<T> {
   totalCount: number;
 }
 
-export type ConsultationState = "booked" | "consulted" | "missed" | "none";
+export type ConsultationState = "booked" | "rescheduled" | "consulted" | "missed" | "cancelled" | "none";
 
 /** Where the customer is with consultations, worked out from their bookings (backend ConsultationDto). */
 export interface Consultation {

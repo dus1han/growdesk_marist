@@ -5,7 +5,7 @@ import { useCallback, useMemo } from "react";
 import { CREATED_PRESETS, FOLLOW_UP_PRESETS } from "@/lib/dates";
 import type { ConsultationState, CustomerFilters } from "@/types/customers";
 
-const CONSULTATION_STATES: ConsultationState[] = ["booked", "consulted", "missed", "none"];
+const CONSULTATION_STATES: ConsultationState[] = ["booked", "rescheduled", "consulted", "missed", "cancelled", "none"];
 
 /** URL parameter names: short, readable, shareable (spec §52). */
 export type FilterParam = "q" | "stage" | "consultation" | "treatment" | "source" | "assigned" | "created" | "followup" | "page";

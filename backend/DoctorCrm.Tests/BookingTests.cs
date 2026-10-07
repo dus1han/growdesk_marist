@@ -320,16 +320,20 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         var reason = (await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/cancellation-reasons")))[0].Id;
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{first.Id}/cancel", new CancelBookingRequest(reason, null)));
         c = await CustomerAsync(admin, customer.Id);
-        Assert.Equal("missed", c.Consultation.State);
+        Assert.Equal("cancelled", c.Consultation.State);
         Assert.Equal("interested", c.Stage.SystemKey);
 
-        // Rescheduled bookings don't count; their replacement does.
+        // The rescheduled booking doesn't count; its replacement does, shown as rescheduled.
         var second = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, day.AddDays(1), T(9), T(9, 30), [treatments[0].Id])));
         var moved = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{second.Id}/reschedule",
             new RescheduleBookingRequest(day.AddDays(2), T(10), T(10, 30), null)));
         c = await CustomerAsync(admin, customer.Id);
-        Assert.Equal("booked", c.Consultation.State);
+        Assert.Equal("rescheduled", c.Consultation.State);
         Assert.Equal(moved.Id, c.Consultation.BookingId);
+        var rescheduled = await DataAsync<PagedResult<CustomerListItemDto>>(await admin.GetAsync($"/api/customers?consultation=rescheduled&pageSize=100&search={Uri.EscapeDataString(customer.Name)}"));
+        Assert.Equal("rescheduled", Assert.Single(rescheduled.Items).Consultation.State);
+        var booked = await DataAsync<PagedResult<CustomerListItemDto>>(await admin.GetAsync($"/api/customers?consultation=booked&pageSize=100&search={Uri.EscapeDataString(customer.Name)}"));
+        Assert.Empty(booked.Items);
 
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{moved.Id}/complete",
@@ -344,6 +348,8 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         Assert.Equal("consulted", Assert.Single(consulted.Items).Consultation.State);
         var missed = await DataAsync<PagedResult<CustomerListItemDto>>(await admin.GetAsync($"/api/customers?consultation=missed&pageSize=100&search={Uri.EscapeDataString(customer.Name)}"));
         Assert.Empty(missed.Items);
+        var cancelled = await DataAsync<PagedResult<CustomerListItemDto>>(await admin.GetAsync($"/api/customers?consultation=cancelled&pageSize=100&search={Uri.EscapeDataString(customer.Name)}"));
+        Assert.Empty(cancelled.Items);
     }
 
     [Fact]

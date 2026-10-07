@@ -341,7 +341,7 @@ public class BotTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty(await DataAsync<List<BotBookingDto>>(await bot.GetAsync($"/api/bot/bookings?whatsapp={Uri.EscapeDataString(number)}")));
         Assert.Equal(HttpStatusCode.Conflict, (await bot.PostAsJsonAsync($"/api/bot/bookings/{id}/cancel", new BotCancelRequest(number, null))).StatusCode);
         var customer = await DataAsync<CustomerDetailDto>(await admin.GetAsync($"/api/customers/{detail.Customer.Id}"));
-        Assert.Equal("missed", customer.Consultation.State);
+        Assert.Equal("cancelled", customer.Consultation.State);
     }
 
     [Fact]
