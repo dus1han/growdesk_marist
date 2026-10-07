@@ -24,7 +24,7 @@ public class AuthCookieOptions
 {
     public const string Section = "AuthCookie";
 
-    public string Name { get; set; } = "growdesk_session";
+    public string Name { get; set; } = "growdesk_marist_session";
 
     /// <summary>
     /// Send the cookie only over HTTPS. True in production behind TLS; must be false while the

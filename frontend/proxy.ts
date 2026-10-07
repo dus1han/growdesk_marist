@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /** Must match AuthCookie:Name in the backend configuration. */
-const SESSION_COOKIE = "growdesk_session";
+const SESSION_COOKIE = "growdesk_marist_session";
 
 const PUBLIC_PATHS = ["/login"];
 
