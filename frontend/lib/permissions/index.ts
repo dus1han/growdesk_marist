@@ -16,6 +16,7 @@ export const Permission = {
   AdminAccess: "admin.access",
   UsersManage: "admin.users",
   SettingsManage: "admin.settings",
+  AuditView: "admin.audit",
 } as const;
 
 export type PermissionKey = (typeof Permission)[keyof typeof Permission];

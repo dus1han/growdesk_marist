@@ -28,6 +28,36 @@ public class AdminIntegrationTests(ApiFactory factory) : IClassFixture<ApiFactor
     private async Task<int> RoleIdAsync(HttpClient admin, string name) =>
         (await DataAsync<List<RoleDto>>(await admin.GetAsync("/api/roles"))).Single(r => r.Name == name).Id;
 
+    // ---- Audit log ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Audit_log_lists_filters_and_names_the_customer_and_is_admin_only()
+    {
+        var admin = await AdminAsync();
+        var name = $"Audit Person {Guid.NewGuid():N}"[..24];
+        var customer = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers",
+            new SaveCustomerRequest(name, $"050 {Random.Shared.Next(5000000, 5999999)}", null, null, null, null, 1, null, [1], null, null, null, null)));
+
+        var found = await DataAsync<PagedResult<AuditLogDto>>(await admin.GetAsync($"/api/audit-logs?search={Uri.EscapeDataString(name)}"));
+        var entry = Assert.Single(found.Items, e => e.Action == "Customer Created");
+        Assert.Equal(name, entry.Subject);
+        Assert.Equal(customer.Id, entry.CustomerId);
+        Assert.NotNull(entry.UserName);
+
+        var logins = await DataAsync<PagedResult<AuditLogDto>>(await admin.GetAsync("/api/audit-logs?action=User%20Logged%20In&pageSize=5"));
+        Assert.NotEmpty(logins.Items);
+        Assert.All(logins.Items, e => Assert.Equal("User Logged In", e.Action));
+
+        var filters = await DataAsync<AuditFiltersDto>(await admin.GetAsync("/api/audit-logs/filters"));
+        Assert.Contains("Customer Created", filters.Actions);
+        Assert.Contains(filters.Users, u => u.Id == entry.UserId);
+
+        await DataAsync<UserDto>(await admin.PostAsJsonAsync("/api/users",
+            new CreateUserRequest("Audit Staff", "Audit_Staff", null, await RoleIdAsync(admin, "Staff"), "Staff-Pass-9")));
+        var staff = await factory.SignInNewUserAsync("Audit_Staff", "Staff-Pass-9");
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync("/api/audit-logs")).StatusCode);
+    }
+
     // ---- Lookup lists -------------------------------------------------------------------------
 
     [Fact]

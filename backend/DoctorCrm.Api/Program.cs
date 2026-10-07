@@ -187,6 +187,7 @@ builder.Services.AddRateLimiter(o =>
 // ---- Application services ------------------------------------------------------
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped(typeof(LookupService<>));
 builder.Services.AddScoped<UserService>();

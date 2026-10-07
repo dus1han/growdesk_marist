@@ -21,6 +21,7 @@ public static class Permissions
     public const string AdminAccess = "admin.access";
     public const string UsersManage = "admin.users";
     public const string SettingsManage = "admin.settings";
+    public const string AuditView = "admin.audit";
 
     public static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>
     {
@@ -35,6 +36,7 @@ public static class Permissions
         [AdminAccess] = "Open the administration area",
         [UsersManage] = "Manage users",
         [SettingsManage] = "Manage treatments, stages, fields and settings",
+        [AuditView] = "View the audit log",
     };
 
     public static IEnumerable<string> All => Descriptions.Keys;
