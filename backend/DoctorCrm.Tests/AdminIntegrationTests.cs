@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using DoctorCrm.Api.Data;
 using DoctorCrm.Api.DTOs;
+using DoctorCrm.Api.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoctorCrm.Tests;
 
@@ -27,6 +31,38 @@ public class AdminIntegrationTests(ApiFactory factory) : IClassFixture<ApiFactor
 
     private async Task<int> RoleIdAsync(HttpClient admin, string name) =>
         (await DataAsync<List<RoleDto>>(await admin.GetAsync("/api/roles"))).Single(r => r.Name == name).Id;
+
+    [Fact]
+    public async Task Permission_changes_apply_to_existing_sessions_without_signing_in_again()
+    {
+        var admin = await AdminAsync();
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/audit-logs")).StatusCode);
+
+        async Task SetAdminHoldsAuditAsync(bool holds)
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var role = await db.Roles.SingleAsync(r => r.Name == "Admin");
+            var perm = await db.Permissions.SingleAsync(p => p.Key == "admin.audit");
+            var link = await db.RolePermissions.SingleOrDefaultAsync(rp => rp.RoleId == role.Id && rp.PermissionId == perm.Id);
+            if (holds && link is null) db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = perm.Id });
+            if (!holds && link is not null) db.RolePermissions.Remove(link);
+            await db.SaveChangesAsync();
+        }
+
+        // Like a release that adds a permission while the admin is signed in: the same session
+        // loses it, then gains it, with no new sign-in.
+        try
+        {
+            await SetAdminHoldsAuditAsync(false);
+            Assert.Equal(HttpStatusCode.Forbidden, (await admin.GetAsync("/api/audit-logs")).StatusCode);
+        }
+        finally
+        {
+            await SetAdminHoldsAuditAsync(true);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/audit-logs")).StatusCode);
+    }
 
     // ---- Audit log ---------------------------------------------------------------------------
 
