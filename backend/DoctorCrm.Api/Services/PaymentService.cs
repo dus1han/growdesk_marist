@@ -7,9 +7,9 @@ using Microsoft.EntityFrameworkCore;
 namespace DoctorCrm.Api.Services;
 
 /// <summary>
-/// Consultation payments (spec §28). Every change is a new entry, never an edit: a pending
-/// payment that is later settled keeps its Pending entry and gains a Paid one. A booking's
-/// latest entry is its current payment state.
+/// Consultation payments (spec §28). Every payment is a new entry, never an edit: money received
+/// (Paid, the whole balance or part of it) or a balance written off (Waived). What a consultation
+/// still owes is its Balance (<see cref="BookingMoney"/>); a customer's outstanding is the sum.
 /// </summary>
 public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clock, SettingsService settings)
 {
@@ -30,16 +30,15 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
     public async Task<PaymentSummaryDto> SummaryAsync(PaymentQuery q, CancellationToken ct)
     {
         // Collected and waived: entries recorded in the range.
-        var inRange = await FilterAsync(q with { CurrentOnly = false }, includeStatus: false, includeDates: true, ct);
+        var inRange = await FilterAsync(q, includeStatus: false, includeDates: true, ct);
         var collected = await inRange.Where(p => p.Status == PaymentStatus.Paid)
             .GroupBy(_ => 1).Select(g => new { Sum = g.Sum(p => p.Amount), Count = g.Count() }).FirstOrDefaultAsync(ct);
         var waived = await inRange.Where(p => p.Status == PaymentStatus.Waived)
             .GroupBy(_ => 1).Select(g => new { Sum = g.Sum(p => p.Amount), Count = g.Count() }).FirstOrDefaultAsync(ct);
 
-        // Outstanding: still pending today, whatever the range.
-        var current = await FilterAsync(q with { CurrentOnly = true }, includeStatus: false, includeDates: false, ct);
-        var outstanding = await current.Where(p => p.Status == PaymentStatus.Pending)
-            .GroupBy(_ => 1).Select(g => new { Sum = g.Sum(p => p.Amount), Count = g.Count() }).FirstOrDefaultAsync(ct);
+        // Outstanding: every balance still owed today, whatever the range.
+        var owed = FilterOutstanding(new OutstandingQuery { CustomerId = q.CustomerId, Search = q.Search });
+        var outstanding = await owed.GroupBy(_ => 1).Select(g => new { Sum = g.Sum(b => b.Balance), Count = g.Count() }).FirstOrDefaultAsync(ct);
 
         var currency = (await settings.GetAsync(ct)).Currency;
         return new PaymentSummaryDto(
@@ -49,16 +48,34 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
             currency);
     }
 
-    /// <summary>Settles a completed consultation whose current payment is Pending.</summary>
+    /// <summary>Consultations still owed money, oldest first.</summary>
+    public async Task<PagedResult<OutstandingItemDto>> OutstandingAsync(OutstandingQuery q, CancellationToken ct)
+    {
+        var page = Math.Max(1, q.Page);
+        var size = Math.Clamp(q.PageSize, 1, 200);
+        var query = FilterOutstanding(q);
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime).ThenBy(b => b.Id)
+            .Skip((page - 1) * size).Take(size)
+            .Select(b => new OutstandingItemDto(
+                b.Id,
+                new NamedRef(b.Customer.Id, b.Customer.Name),
+                b.BookingDate, b.StartTime,
+                b.Treatments.OrderBy(t => t.Treatment.DisplayOrder).Select(t => t.Treatment.Name).ToList(),
+                b.ConsultationCharge ?? 0, b.AmountPaid, b.Balance))
+            .ToListAsync(ct);
+        return new PagedResult<OutstandingItemDto>(items, page, size, total);
+    }
+
+    /// <summary>Money received for a completed consultation: any amount up to its balance.</summary>
     public async Task<PaymentListItemDto> RecordAsync(int bookingId, RecordPaymentRequest r, int? userId, CancellationToken ct)
     {
-        var booking = await db.Bookings.Include(b => b.Payments).SingleOrDefaultAsync(b => b.Id == bookingId, ct)
-            ?? throw BusinessRuleException.NotFound("Booking");
-        var latest = booking.Payments.OrderByDescending(p => p.Id).FirstOrDefault();
-        if (booking.Status != BookingStatus.Completed || latest is null)
-            throw new BusinessRuleException("Payments are recorded when the consultation is completed.", StatusCodes.Status409Conflict);
-        if (latest.Status != PaymentStatus.Pending)
-            throw new BusinessRuleException($"This consultation's payment is already {latest.Status.ToString().ToLower()}.", StatusCodes.Status409Conflict);
+        var booking = await LoadOwingAsync(bookingId, ct);
+        if (r.Amount <= 0)
+            throw new BusinessRuleException("Enter the amount received.", field: "amount");
+        if (r.Amount > booking.Balance)
+            throw new BusinessRuleException($"That's more than the balance of {booking.Balance:#,##0.##}.", field: "amount");
         if (!await db.PaymentMethods.AnyAsync(m => m.Id == r.PaymentMethodId && m.IsActive, ct))
             throw new BusinessRuleException("Choose how the customer paid.", field: "paymentMethodId");
 
@@ -75,18 +92,74 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
         {
             BookingId = booking.Id,
             CustomerId = booking.CustomerId,
-            Amount = latest.Amount,
+            Amount = r.Amount,
             Status = PaymentStatus.Paid,
             PaymentMethodId = r.PaymentMethodId,
             PaymentDate = paidAt,
             CreatedById = userId,
             CreatedAt = now,
         };
-        db.Payments.Add(payment);
-        audit.Record(userId, "Payment Recorded", nameof(Booking), booking.Id, new { amount = latest.Amount, status = "Paid", settledPending = true });
+        booking.Payments.Add(payment);
+        BookingMoney.Recalculate(booking);
+        // "later": paid after the consultation, so the dashboard's activity shows it (see DashboardService).
+        audit.Record(userId, "Payment Recorded", nameof(Booking), booking.Id, new { amount = r.Amount, balance = booking.Balance, later = true });
         await db.SaveChangesAsync(ct);
 
         return await Project(db.Payments.AsNoTracking().Where(p => p.Id == payment.Id)).SingleAsync(ct);
+    }
+
+    /// <summary>Writes off what a consultation still owes.</summary>
+    public async Task<PaymentListItemDto> WaiveAsync(int bookingId, int? userId, CancellationToken ct)
+    {
+        var booking = await LoadOwingAsync(bookingId, ct);
+        var waived = booking.Balance;
+        var entry = new Payment
+        {
+            BookingId = booking.Id,
+            CustomerId = booking.CustomerId,
+            Amount = waived,
+            Status = PaymentStatus.Waived,
+            CreatedById = userId,
+            CreatedAt = DateTime.UtcNow,
+        };
+        booking.Payments.Add(entry);
+        BookingMoney.Recalculate(booking);
+        audit.Record(userId, "Balance Waived", nameof(Booking), booking.Id, new { amount = waived });
+        await db.SaveChangesAsync(ct);
+
+        return await Project(db.Payments.AsNoTracking().Where(p => p.Id == entry.Id)).SingleAsync(ct);
+    }
+
+    private async Task<Booking> LoadOwingAsync(int bookingId, CancellationToken ct)
+    {
+        var booking = await db.Bookings.Include(b => b.Payments).SingleOrDefaultAsync(b => b.Id == bookingId, ct)
+            ?? throw BusinessRuleException.NotFound("Booking");
+        if (booking.Status != BookingStatus.Completed)
+            throw new BusinessRuleException("Payments are recorded once the consultation is completed.", StatusCodes.Status409Conflict);
+        if (booking.Balance <= 0)
+            throw new BusinessRuleException("This consultation has nothing left to pay.", StatusCodes.Status409Conflict);
+        return booking;
+    }
+
+    private IQueryable<Booking> FilterOutstanding(OutstandingQuery q)
+    {
+        var query = db.Bookings.AsNoTracking().Where(b => b.Balance > 0);
+        if (q.CustomerId is { } customerId) query = query.Where(b => b.CustomerId == customerId);
+        if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            var (like, handle, digits, digitsLike) = SearchTerms(q.Search);
+            query = query.Where(b => EF.Functions.ILike(b.Customer.Name, like)
+                                     || (b.Customer.InstagramName != null && EF.Functions.Like(b.Customer.InstagramName, handle))
+                                     || (digits.Length >= 3 && b.Customer.WhatsAppNumber != null && EF.Functions.Like(b.Customer.WhatsAppNumber, digitsLike)));
+        }
+        return query;
+    }
+
+    private static (string Like, string Handle, string Digits, string DigitsLike) SearchTerms(string search)
+    {
+        var term = search.Trim();
+        var digits = new string(term.Where(char.IsDigit).ToArray()).TrimStart('0');
+        return ($"%{term}%", $"%{term.TrimStart('@').ToLowerInvariant()}%", digits, $"%{digits}%");
     }
 
     public async Task<(byte[] Bytes, string FileName)> ExportAsync(PaymentQuery q, int? userId, CancellationToken ct)
@@ -151,9 +224,8 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
 
     private async Task<IQueryable<Payment>> FilterAsync(PaymentQuery q, bool includeStatus, bool includeDates, CancellationToken ct)
     {
-        var query = db.Payments.AsNoTracking();
-
-        if (q.CurrentOnly) query = query.Where(p => p.Id == p.Booking.Payments.Max(x => x.Id));
+        // Old "nothing received yet" entries carry no money: what is owed is the booking's balance.
+        var query = db.Payments.AsNoTracking().Where(p => p.Status != PaymentStatus.Pending);
         if (includeStatus && Enum.TryParse<PaymentStatus>(q.Status, true, out var status)) query = query.Where(p => p.Status == status);
         if (q.PaymentMethodId is { } methodId) query = query.Where(p => p.PaymentMethodId == methodId);
         if (q.CustomerId is { } customerId) query = query.Where(p => p.CustomerId == customerId);
@@ -169,11 +241,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
         }
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
-            var term = q.Search.Trim();
-            var like = $"%{term}%";
-            var handle = $"%{term.TrimStart('@').ToLowerInvariant()}%";
-            var digits = new string(term.Where(char.IsDigit).ToArray()).TrimStart('0');
-            var digitsLike = $"%{digits}%";
+            var (like, handle, digits, digitsLike) = SearchTerms(q.Search);
             query = query.Where(p => EF.Functions.ILike(p.Customer.Name, like)
                                      || (p.Customer.InstagramName != null && EF.Functions.Like(p.Customer.InstagramName, handle))
                                      || (digits.Length >= 3 && p.Customer.WhatsAppNumber != null && EF.Functions.Like(p.Customer.WhatsAppNumber, digitsLike)));
@@ -193,5 +261,5 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
             p.PaymentDate,
             p.CreatedAt,
             p.CreatedBy != null ? p.CreatedBy.FullName : null,
-            p.Id == p.Booking.Payments.Max(x => x.Id)));
+            p.Booking.Balance));
 }

@@ -31,7 +31,9 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
                 b.Status.ToString(),
                 b.Treatments.OrderBy(t => t.Treatment.DisplayOrder).Select(t => new NamedRef(t.TreatmentId, t.Treatment.Name)).ToList(),
                 b.ConsultationCharge,
-                b.Payments.OrderByDescending(p => p.Id).Select(p => p.Status.ToString()).FirstOrDefault()))
+                b.AmountPaid,
+                b.Balance,
+                BookingMoney.State(b.Status, b.ConsultationCharge, b.AmountPaid, b.Balance)))
             .AsSplitQuery()
             .ToListAsync(ct);
 
@@ -56,8 +58,7 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
                 .Where(s => s is not null).Select(s => s!.Value).ToList();
             query = query.Where(b => statuses.Contains(b.Status));
         }
-        if (Enum.TryParse<PaymentStatus>(q.PaymentStatus, true, out var payment))
-            query = query.Where(b => b.Payments.Any(p => p.Status == payment));
+        query = BookingMoney.WhereState(query, q.PaymentStatus);
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
             var term = q.Search.Trim();
@@ -101,14 +102,16 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
             b.Doctor is null ? null : new NamedRef(b.Doctor.Id, b.Doctor.FullName),
             b.BookingDate, b.StartTime, b.EndTime, b.Status.ToString(),
             b.Treatments.OrderBy(t => t.Treatment.DisplayOrder).Select(t => new NamedRef(t.TreatmentId, t.Treatment.Name)).ToList(),
-            b.Notes, b.ConsultationCharge, b.DoctorNotes, b.NextTreatmentDate,
+            b.Notes, b.ConsultationCharge, b.AmountPaid, b.Balance,
+            BookingMoney.State(b.Status, b.ConsultationCharge, b.AmountPaid, b.Balance),
+            b.DoctorNotes, b.NextTreatmentDate,
             b.NextTreatment is null ? null : new NamedRef(b.NextTreatment.Id, b.NextTreatment.Name),
             b.CancellationReason is null ? null : new NamedRef(b.CancellationReason.Id, b.CancellationReason.Name),
             b.CancellationNote,
             b.OriginalBooking is null ? null
                 : new BookingLinkDto(b.OriginalBooking.Id, b.OriginalBooking.BookingDate, b.OriginalBooking.StartTime, b.OriginalBooking.Status.ToString()),
             next,
-            b.Payments.OrderByDescending(p => p.CreatedAt).Select(p => new PaymentDto(
+            b.Payments.Where(p => p.Status != PaymentStatus.Pending).OrderByDescending(p => p.CreatedAt).Select(p => new PaymentDto(
                 p.Id, p.Amount, p.Status.ToString(),
                 p.PaymentMethod is null ? null : new NamedRef(p.PaymentMethod.Id, p.PaymentMethod.Name),
                 p.PaymentDate, p.CreatedBy?.FullName, p.CreatedAt)).ToList(),
@@ -174,7 +177,6 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
     public async Task<BookingDetailDto> CompleteAsync(int id, CompleteBookingRequest r, int? userId, CancellationToken ct)
     {
         var booking = await LoadBookedAsync(id, "completed", ct);
-        var status = Enum.Parse<PaymentStatus>(r.PaymentStatus, ignoreCase: true);
 
         // A booking made without a treatment gets one now: what was actually done. It joins the
         // customer's interests too.
@@ -194,10 +196,12 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
             }
         }
 
-        if (status == PaymentStatus.Paid && r.PaymentMethodId is null)
+        // Paid now: nothing up to the full amount. The rest is the balance, paid later or waived.
+        if (r.PaidAmount < 0 || r.PaidAmount > r.ConsultationCharge)
+            throw new BusinessRuleException("The paid amount must be between 0 and the consultation amount.", field: "paidAmount");
+        if (r.PaidAmount > 0 && r.PaymentMethodId is null)
             throw new BusinessRuleException("Choose how the customer paid.", field: "paymentMethodId");
-        int? methodId = status == PaymentStatus.Waived ? null : r.PaymentMethodId;
-        if (methodId is { } m && !await db.PaymentMethods.AnyAsync(x => x.Id == m && x.IsActive, ct))
+        if (r.PaidAmount > 0 && !await db.PaymentMethods.AnyAsync(x => x.Id == r.PaymentMethodId && x.IsActive, ct))
             throw new BusinessRuleException("Choose a valid payment method.", field: "paymentMethodId");
 
         // Next treatment: both or neither (spec §24). The validator checks too; this is the backstop.
@@ -217,23 +221,26 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
         booking.NextTreatmentDate = r.NextTreatmentDate;
         booking.NextTreatmentId = r.NextTreatmentId;
 
-        booking.Payments.Add(new Payment
-        {
-            CustomerId = booking.CustomerId,
-            Amount = r.ConsultationCharge,
-            Status = status,
-            PaymentMethodId = methodId,
-            PaymentDate = status == PaymentStatus.Paid ? now : null,
-            CreatedById = userId,
-            CreatedAt = now,
-        });
+        if (r.PaidAmount > 0)
+            booking.Payments.Add(new Payment
+            {
+                CustomerId = booking.CustomerId,
+                Amount = r.PaidAmount,
+                Status = PaymentStatus.Paid,
+                PaymentMethodId = r.PaymentMethodId,
+                PaymentDate = now,
+                CreatedById = userId,
+                CreatedAt = now,
+            });
+        BookingMoney.Recalculate(booking);
 
         // The one automatic status change: Interested / Follow-up / Lost → Customer.
         await stages.MoveAsync(booking.Customer, [StageKeys.Interested, StageKeys.FollowUp, StageKeys.Lost], StageKeys.Customer, userId, "Consultation completed", ct);
 
         audit.Record(userId, "Consultation Completed", nameof(Booking), id,
-            new { charge = r.ConsultationCharge, payment = status.ToString(), nextTreatment = r.NextTreatmentDate });
-        audit.Record(userId, "Payment Recorded", nameof(Booking), id, new { amount = r.ConsultationCharge, status = status.ToString() });
+            new { charge = r.ConsultationCharge, paid = r.PaidAmount, balance = booking.Balance, nextTreatment = r.NextTreatmentDate });
+        if (r.PaidAmount > 0)
+            audit.Record(userId, "Payment Recorded", nameof(Booking), id, new { amount = r.PaidAmount, balance = booking.Balance });
         await db.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
     }

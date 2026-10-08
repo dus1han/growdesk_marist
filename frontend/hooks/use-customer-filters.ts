@@ -8,7 +8,7 @@ import type { ConsultationState, CustomerFilters } from "@/types/customers";
 const CONSULTATION_STATES: ConsultationState[] = ["booked", "rescheduled", "consulted", "missed", "cancelled", "none"];
 
 /** URL parameter names: short, readable, shareable (spec §52). */
-export type FilterParam = "q" | "stage" | "consultation" | "treatment" | "source" | "assigned" | "created" | "followup" | "page";
+export type FilterParam = "q" | "stage" | "consultation" | "treatment" | "source" | "assigned" | "created" | "followup" | "owes" | "page";
 
 const num = (v: string | null) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
 
@@ -31,6 +31,8 @@ export function useCustomerFilters() {
       assigned: params.get("assigned") ?? undefined,
       created: params.get("created") ?? undefined,
       followup: params.get("followup") ?? undefined,
+      /** "yes": only customers who still owe money. */
+      owes: params.get("owes") === "yes" ? "yes" : undefined,
       page: num(params.get("page")) ?? 1,
     }),
     [params],
@@ -50,6 +52,7 @@ export function useCustomerFilters() {
       createdTo: created?.to,
       followUpFrom: followUp?.from,
       followUpTo: followUp?.to,
+      hasOutstanding: values.owes === "yes" ? true : undefined,
       page: values.page,
     };
   }, [values]);
@@ -68,7 +71,7 @@ export function useCustomerFilters() {
 
   const clearAll = useCallback(() => router.replace(pathname, { scroll: false }), [pathname, router]);
 
-  const activeCount = ["stage", "consultation", "treatment", "source", "assigned", "created", "followup"].filter(
+  const activeCount = ["stage", "consultation", "treatment", "source", "assigned", "created", "followup", "owes"].filter(
     (k) => values[k as keyof typeof values] !== undefined,
   ).length;
 

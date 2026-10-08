@@ -43,6 +43,8 @@ export interface CustomerListItem {
   nextFollowUpDate: string | null;
   nextBooking: { id: number; date: string; startTime: string } | null;
   createdAt: string;
+  /** Still owed on completed consultations; null for users who can't see payments. */
+  outstanding: number | null;
 }
 
 /** string | number | boolean | number[], depending on the field type. */
@@ -76,6 +78,8 @@ export interface CustomerDetail {
   customFields: CustomerCustomField[];
   createdAt: string;
   updatedAt: string;
+  /** Still owed on completed consultations; null for users who can't see payments. */
+  outstanding: number | null;
 }
 
 export interface SaveCustomer {
@@ -119,5 +123,7 @@ export interface CustomerFilters {
   createdTo?: string;
   followUpFrom?: string;
   followUpTo?: string;
+  /** true: only customers who still owe money. */
+  hasOutstanding?: boolean;
   page?: number;
 }

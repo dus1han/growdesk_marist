@@ -10,7 +10,7 @@ namespace DoctorCrm.Api.Controllers;
 [HasPermission(Permissions.PaymentsView)]
 public class PaymentsController(PaymentService payments) : ControllerBase
 {
-    /// <summary>Payment entries, newest first. By default only each booking's current entry.</summary>
+    /// <summary>Payment entries (money received, balances waived), newest first.</summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<PagedResult<PaymentListItemDto>>>> List([FromQuery] PaymentQuery query, CancellationToken ct) =>
         Ok(ApiResponse<PagedResult<PaymentListItemDto>>.Ok(await payments.ListAsync(query, ct)));
@@ -19,6 +19,11 @@ public class PaymentsController(PaymentService payments) : ControllerBase
     [HttpGet("summary")]
     public async Task<ActionResult<ApiResponse<PaymentSummaryDto>>> Summary([FromQuery] PaymentQuery query, CancellationToken ct) =>
         Ok(ApiResponse<PaymentSummaryDto>.Ok(await payments.SummaryAsync(query, ct)));
+
+    /// <summary>Completed consultations that still have a balance, oldest first.</summary>
+    [HttpGet("outstanding")]
+    public async Task<ActionResult<ApiResponse<PagedResult<OutstandingItemDto>>>> Outstanding([FromQuery] OutstandingQuery query, CancellationToken ct) =>
+        Ok(ApiResponse<PagedResult<OutstandingItemDto>>.Ok(await payments.OutstandingAsync(query, ct)));
 
     /// <summary>The filtered list as an Excel workbook, with a total row.</summary>
     [HttpGet("export")]
@@ -34,8 +39,13 @@ public class PaymentsController(PaymentService payments) : ControllerBase
 [HasPermission(Permissions.PaymentsManage)]
 public class BookingPaymentsController(PaymentService payments) : ControllerBase
 {
-    /// <summary>Settles a pending consultation payment. The pending entry stays in the history.</summary>
+    /// <summary>Money received: any amount up to the consultation's balance.</summary>
     [HttpPost]
     public async Task<ActionResult<ApiResponse<PaymentListItemDto>>> Record(int bookingId, RecordPaymentRequest request, CancellationToken ct) =>
         Ok(ApiResponse<PaymentListItemDto>.Ok(await payments.RecordAsync(bookingId, request, User.GetUserId(), ct), "Payment recorded."));
+
+    /// <summary>Writes off the consultation's remaining balance.</summary>
+    [HttpPost("waive")]
+    public async Task<ActionResult<ApiResponse<PaymentListItemDto>>> Waive(int bookingId, CancellationToken ct) =>
+        Ok(ApiResponse<PaymentListItemDto>.Ok(await payments.WaiveAsync(bookingId, User.GetUserId(), ct), "Balance waived."));
 }

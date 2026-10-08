@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Pencil,
   Phone,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -22,6 +23,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { BookingDetailsDrawer } from "@/components/bookings/booking-details-drawer";
 import { BookingFormDrawer } from "@/components/bookings/booking-form-drawer";
+import { formatMoney } from "@/components/bookings/booking-status";
 import { CustomerBookingsCard } from "@/components/customers/customer-bookings-card";
 import { CustomerPaymentsCard } from "@/components/customers/customer-payments-card";
 import { whatsAppUrl } from "@/components/customers/whatsapp-link";
@@ -34,6 +36,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toastError } from "@/lib/api/admin";
+import { useLocale } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
 import { describeActivity } from "@/components/activity/describe-activity";
 import { toSavePayload, useActiveLookup, useCustomer, useCustomerActivity, useSaveCustomer } from "@/lib/api/customers";
@@ -247,10 +250,26 @@ function ProfileHeader({
             <span className="font-medium">{customer.leadSource.name}</span>
           </span>
         )}
+        {!!customer.outstanding && <OwesPill amount={customer.outstanding} />}
         {customer.secondaryPhone && <ContactPill icon={Phone} label={customer.secondaryPhone} href={`tel:${customer.secondaryPhone.replace(/\s/g, "")}`} />}
         {customer.email && <ContactPill icon={Mail} label={customer.email} href={`mailto:${customer.email}`} />}
       </div>
     </Card>
+  );
+}
+
+/** What the customer still owes on completed consultations (shown to users who can see payments). */
+function OwesPill({ amount }: { amount: number }) {
+  const { data: locale } = useLocale();
+  return (
+    <span
+      className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm"
+      title="Still owed on completed consultations. See Payments below."
+    >
+      <Wallet className="size-4 text-amber-600" />
+      <span className="text-amber-800/80">Owes</span>
+      <span className="font-semibold text-amber-800">{formatMoney(amount, locale?.currency)}</span>
+    </span>
   );
 }
 

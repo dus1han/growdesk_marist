@@ -10,7 +10,7 @@ public class BookingQuery
     /// <summary>Comma-separated statuses, e.g. "Booked,Completed".</summary>
     public string? Status { get; set; }
     public int? TreatmentId { get; set; }
-    /// <summary>Paid, Pending or Waived.</summary>
+    /// <summary>Paid, PartlyPaid, Unpaid, Waived, NoCharge, or Outstanding (anything still owed).</summary>
     public string? PaymentStatus { get; set; }
     /// <summary>Customer name, WhatsApp number or Instagram name.</summary>
     public string? Search { get; set; }
@@ -30,6 +30,9 @@ public record BookingListItemDto(
     string Status,
     IReadOnlyList<NamedRef> Treatments,
     decimal? ConsultationCharge,
+    decimal AmountPaid,
+    decimal Balance,
+    /// <summary>Paid, PartlyPaid, Unpaid, Waived or NoCharge; null until completed.</summary>
     string? PaymentStatus);
 
 public record PaymentDto(
@@ -56,6 +59,9 @@ public record BookingDetailDto(
     IReadOnlyList<NamedRef> Treatments,
     string? Notes,
     decimal? ConsultationCharge,
+    decimal AmountPaid,
+    decimal Balance,
+    string? PaymentStatus,
     string? DoctorNotes,
     DateOnly? NextTreatmentDate,
     NamedRef? NextTreatment,
@@ -84,9 +90,13 @@ public record CreateBookingRequest(
 /// <summary>Edits a booked consultation's treatments, doctor and notes. Time changes go through reschedule.</summary>
 public record UpdateBookingRequest(int? DoctorId, IReadOnlyList<int> TreatmentIds, string? Notes);
 
+/// <summary>
+/// Completes a consultation. PaidAmount is what the customer paid now (0 up to the charge); the
+/// rest stays as the consultation's balance, to be paid later or waived.
+/// </summary>
 public record CompleteBookingRequest(
     decimal ConsultationCharge,
-    string PaymentStatus,
+    decimal PaidAmount,
     int? PaymentMethodId,
     DateOnly? NextTreatmentDate,
     int? NextTreatmentId,

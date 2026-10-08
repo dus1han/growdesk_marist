@@ -160,6 +160,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         b.Entity<Booking>(e =>
         {
+            e.Property(x => x.AmountPaid).HasPrecision(12, 2);
+            e.Property(x => x.Balance).HasPrecision(12, 2);
+            // Outstanding lists and totals: only bookings that still owe.
+            e.HasIndex(x => new { x.CustomerId, x.Balance }).HasFilter("balance > 0");
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Notes).HasMaxLength(2000);
             e.Property(x => x.DoctorNotes).HasMaxLength(4000);

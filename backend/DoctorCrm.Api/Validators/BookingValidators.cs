@@ -51,8 +51,9 @@ public class CompleteBookingRequestValidator : AbstractValidator<CompleteBooking
     {
         RuleFor(x => x.ConsultationCharge).GreaterThanOrEqualTo(0).WithMessage("The charge can't be negative.")
             .LessThan(1_000_000).WithMessage("That charge looks too large.");
-        RuleFor(x => x.PaymentStatus)
-            .Must(s => Enum.TryParse<PaymentStatus>(s, true, out _)).WithMessage("Choose Paid, Pending or Waived.");
+        RuleFor(x => x.PaidAmount).GreaterThanOrEqualTo(0).WithMessage("The paid amount can't be negative.")
+            .LessThanOrEqualTo(x => x.ConsultationCharge).WithMessage("The paid amount can't be more than the consultation amount.");
+        RuleFor(x => x.PaymentMethodId).NotNull().WithMessage("Choose how the customer paid.").When(x => x.PaidAmount > 0);
         RuleFor(x => x.NextTreatmentId).NotNull().WithMessage("Choose the next treatment, or clear the date.")
             .When(x => x.NextTreatmentDate is not null);
         RuleFor(x => x.NextTreatmentDate).NotNull().WithMessage("Choose the next treatment date, or clear the treatment.")

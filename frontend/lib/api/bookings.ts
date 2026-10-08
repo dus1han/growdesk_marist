@@ -100,7 +100,8 @@ export interface CreateBooking {
 
 export interface CompleteBooking {
   consultationCharge: number;
-  paymentStatus: "Paid" | "Pending" | "Waived";
+  /** Paid now: 0 up to the charge. The rest is the balance. */
+  paidAmount: number;
   paymentMethodId: number | null;
   nextTreatmentDate: string | null;
   nextTreatmentId: number | null;

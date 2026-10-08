@@ -5,6 +5,7 @@ import { CircleAlert, Plus, RotateCcw, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { CustomerFormDrawer } from "@/components/customers/customer-form-drawer";
+import { formatMoney } from "@/components/bookings/booking-status";
 import { CONSULTATION, ConsultationBadge } from "@/components/customers/consultation-badge";
 import { StageBadge, TreatmentChips } from "@/components/customers/stage-badge";
 import { WhatsAppLink } from "@/components/customers/whatsapp-link";
@@ -19,6 +20,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCustomerFilters } from "@/hooks/use-customer-filters";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useLocale } from "@/lib/api/bookings";
 import { CUSTOMER_PAGE_SIZE, useActiveLookup, useCustomers, useUserOptions } from "@/lib/api/customers";
 import { useSession } from "@/lib/auth/session";
 import { CREATED_PRESETS, followUpState, FOLLOW_UP_PRESETS, formatDate } from "@/lib/dates";
@@ -41,6 +43,7 @@ function CustomersView() {
   const router = useRouter();
   const { data: session } = useSession();
   const canManage = can(session?.user, Permission.CustomersManage);
+  const showMoney = can(session?.user, Permission.PaymentsView);
   const { values, apiFilters, set, clearAll, activeCount } = useCustomerFilters();
   const [adding, setAdding] = useState(false);
 
@@ -122,6 +125,14 @@ function CustomersView() {
               onChange={(v) => set("followup", v)}
               options={Object.entries(FOLLOW_UP_PRESETS).map(([k, p]) => ({ value: k, label: p.label }))}
             />
+            {showMoney && (
+              <FilterMenu
+                label="Payment"
+                value={values.owes}
+                onChange={(v) => set("owes", v)}
+                options={[{ value: "yes", label: "Owes money" }]}
+              />
+            )}
             {activeCount > 0 && (
               <button type="button" onClick={() => { setSearch(""); clearAll(); }} className="px-2 text-sm font-medium text-muted hover:text-foreground">
                 Clear all
@@ -159,7 +170,7 @@ function CustomersView() {
           />
         ) : (
           <div className={cn("transition-opacity", isFetching && "opacity-70")}>
-            <CustomerTable items={data.items} onOpen={(id) => router.push(`/customers/${id}`)} />
+            <CustomerTable items={data.items} onOpen={(id) => router.push(`/customers/${id}`)} showMoney={showMoney} />
             <CustomerCards items={data.items} onOpen={(id) => router.push(`/customers/${id}`)} />
             <Pagination
               page={data.page}
@@ -188,7 +199,8 @@ function FollowUp({ date }: { date: string | null }) {
 }
 
 /** Desktop: a real table (clickable rows, keyboard accessible). */
-function CustomerTable({ items, onOpen }: { items: CustomerListItem[]; onOpen: (id: number) => void }) {
+function CustomerTable({ items, onOpen, showMoney }: { items: CustomerListItem[]; onOpen: (id: number) => void; showMoney: boolean }) {
+  const { data: locale } = useLocale();
   return (
     <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-left text-sm">
@@ -200,6 +212,7 @@ function CustomerTable({ items, onOpen }: { items: CustomerListItem[]; onOpen: (
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 font-semibold">Consultation</th>
             <th className="px-4 py-3 font-semibold">Follow-up</th>
+            {showMoney && <th className="px-4 py-3 text-right font-semibold">Outstanding</th>}
             <th className="px-4 py-3 font-semibold">Created</th>
           </tr>
         </thead>
@@ -241,6 +254,15 @@ function CustomerTable({ items, onOpen }: { items: CustomerListItem[]; onOpen: (
               <td className="px-4 py-3">
                 <FollowUp date={c.nextFollowUpDate} />
               </td>
+              {showMoney && (
+                <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+                  {c.outstanding ? (
+                    <span className="font-semibold text-amber-700">{formatMoney(c.outstanding, locale?.currency)}</span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
+              )}
               <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDate(c.createdAt.slice(0, 10))}</td>
             </motion.tr>
           ))}
@@ -252,6 +274,7 @@ function CustomerTable({ items, onOpen }: { items: CustomerListItem[]; onOpen: (
 
 /** Phones: cards instead of a squeezed table (spec §45). */
 function CustomerCards({ items, onOpen }: { items: CustomerListItem[]; onOpen: (id: number) => void }) {
+  const { data: locale } = useLocale();
   return (
     <ul className="divide-y divide-line md:hidden">
       {items.map((c) => (
@@ -281,6 +304,9 @@ function CustomerCards({ items, onOpen }: { items: CustomerListItem[]; onOpen: (
               )}
               <TreatmentChips treatments={c.treatments} max={3} />
               <ConsultationBadge consultation={c.consultation} />
+              {!!c.outstanding && (
+                <p className="text-xs font-semibold text-amber-700">Owes {formatMoney(c.outstanding, locale?.currency)}</p>
+              )}
               {c.nextFollowUpDate && (
                 <p className="text-xs text-muted">
                   Follow-up: <FollowUp date={c.nextFollowUpDate} />

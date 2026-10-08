@@ -85,7 +85,10 @@ export function CustomerBookingsCard({
                       <span className="flex shrink-0 flex-col items-end gap-0.5">
                         <BookingStatusBadge status={b.status} />
                         {b.status === "Completed" && b.consultationCharge !== null && (
-                          <span className="text-[11px] text-muted">{formatMoney(b.consultationCharge, locale?.currency)}</span>
+                          <span className="text-[11px] text-muted">
+                            {formatMoney(b.consultationCharge, locale?.currency)}
+                            {b.balance > 0 && <span className="font-semibold text-amber-700"> · {formatMoney(b.balance, locale?.currency)} owed</span>}
+                          </span>
                         )}
                       </span>
                     </button>

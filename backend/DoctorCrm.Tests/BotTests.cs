@@ -144,12 +144,12 @@ public class BotTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await DataAsync<BotBookingResultDto>(await bot.PatchAsJsonAsync($"/api/bot/bookings/{id}", new BotBookingUpdateRequest(number, null, null, null, "Wants advice")));
 
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
-        var missing = await admin.PostAsJsonAsync($"/api/bookings/{id}/complete", new CompleteBookingRequest(100, "Paid", methods[0].Id, null, null, null));
+        var missing = await admin.PostAsJsonAsync($"/api/bookings/{id}/complete", new CompleteBookingRequest(100, 100, methods[0].Id, null, null, null));
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
         Assert.Equal("treatmentIds", (await BodyAsync(missing)).Errors.Single().Field);
 
         var done = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{id}/complete",
-            new CompleteBookingRequest(100, "Paid", methods[0].Id, null, null, null, [t[1]])));
+            new CompleteBookingRequest(100, 100, methods[0].Id, null, null, null, [t[1]])));
         Assert.Equal("Completed", done.Status);
         Assert.Equal(t[1], Assert.Single(done.Treatments).Id);
         var customer = await DataAsync<CustomerDetailDto>(await admin.GetAsync($"/api/customers/{lead.CustomerId}"));

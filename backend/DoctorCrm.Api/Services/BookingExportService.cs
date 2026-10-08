@@ -35,8 +35,10 @@ public class BookingExportService(AppDbContext db, SettingsService settings, Aud
                 Doctor = b.Doctor != null ? b.Doctor.FullName : null,
                 b.Status,
                 b.ConsultationCharge,
-                Payment = b.Payments.OrderByDescending(p => p.Id)
-                    .Select(p => new { p.Status, Method = p.PaymentMethod != null ? p.PaymentMethod.Name : null, p.PaymentDate })
+                b.AmountPaid,
+                b.Balance,
+                LastPayment = b.Payments.Where(p => p.Status == PaymentStatus.Paid).OrderByDescending(p => p.Id)
+                    .Select(p => new { Method = p.PaymentMethod != null ? p.PaymentMethod.Name : null, p.PaymentDate })
                     .FirstOrDefault(),
                 NextTreatment = b.NextTreatment != null ? b.NextTreatment.Name : null,
                 b.NextTreatmentDate,
@@ -55,7 +57,7 @@ public class BookingExportService(AppDbContext db, SettingsService settings, Aud
 
         var headers = new List<string> { "Date", "Start", "End", "Customer", "WhatsApp", "Instagram", "Treatments", "Doctor", "Status" };
         if (includePayments)
-            headers.AddRange([$"Charge ({locale.Currency})", "Payment", "Payment method", "Paid on"]);
+            headers.AddRange([$"Charge ({locale.Currency})", $"Paid ({locale.Currency})", $"Balance ({locale.Currency})", "Payment", "Payment method", "Paid on"]);
         headers.AddRange(["Next treatment", "Next treatment date", "Cancellation reason", "Notes"]);
 
         for (var c = 0; c < headers.Count; c++) sheet.Cell(1, c + 1).Value = headers[c];
@@ -76,11 +78,19 @@ public class BookingExportService(AppDbContext db, SettingsService settings, Aud
             if (includePayments)
             {
                 var charge = sheet.Cell(r, c++);
+                var completed = row.Status == BookingStatus.Completed && row.ConsultationCharge is not null;
                 if (row.ConsultationCharge is { } amount) charge.Value = amount;
-                sheet.Cell(r, c++).Value = row.Payment?.Status.ToString() ?? "";
-                sheet.Cell(r, c++).Value = row.Payment?.Method ?? "";
+                var paidCell = sheet.Cell(r, c++);
+                var balanceCell = sheet.Cell(r, c++);
+                if (completed)
+                {
+                    paidCell.Value = row.AmountPaid;
+                    balanceCell.Value = row.Balance;
+                }
+                sheet.Cell(r, c++).Value = PaymentLabel(BookingMoney.State(row.Status, row.ConsultationCharge, row.AmountPaid, row.Balance));
+                sheet.Cell(r, c++).Value = row.LastPayment?.Method ?? "";
                 var paidOn = sheet.Cell(r, c++);
-                if (row.Payment?.PaymentDate is { } paid) paidOn.Value = TimeZoneInfo.ConvertTimeFromUtc(paid, zone);
+                if (row.LastPayment?.PaymentDate is { } paid) paidOn.Value = TimeZoneInfo.ConvertTimeFromUtc(paid, zone);
             }
             sheet.Cell(r, c++).Value = row.NextTreatment ?? "";
             var next = sheet.Cell(r, c++);
@@ -109,6 +119,8 @@ public class BookingExportService(AppDbContext db, SettingsService settings, Aud
         Format("Next treatment date", "dd mmm yyyy");
         Format("Paid on", "dd mmm yyyy hh:mm");
         Format($"Charge ({locale.Currency})", "#,##0.00");
+        Format($"Paid ({locale.Currency})", "#,##0.00");
+        Format($"Balance ({locale.Currency})", "#,##0.00");
 
         sheet.Range(1, 1, last, headers.Count).SetAutoFilter();
         sheet.Columns().AdjustToContents(1, Math.Min(last, 500));
@@ -124,4 +136,12 @@ public class BookingExportService(AppDbContext db, SettingsService settings, Aud
         var fileName = $"bookings-{DateTime.UtcNow:yyyy-MM-dd-HHmm}.xlsx";
         return (stream.ToArray(), fileName);
     }
+
+    private static string PaymentLabel(string? state) => state switch
+    {
+        BookingMoney.PartlyPaid => "Partly paid",
+        BookingMoney.NoCharge => "No charge",
+        null => "",
+        _ => state,
+    };
 }

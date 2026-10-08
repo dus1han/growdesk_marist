@@ -51,6 +51,8 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
         }
         if (q.FollowUpFrom is { } ff) query = query.Where(c => c.NextFollowUpDate >= ff);
         if (q.FollowUpTo is { } ft) query = query.Where(c => c.NextFollowUpDate <= ft);
+        if (q.HasOutstanding is { } owes)
+            query = query.Where(c => db.Bookings.Any(b => b.CustomerId == c.Id && b.Balance > 0) == owes);
 
         var total = await query.CountAsync(ct);
         var today = await clock.TodayAsync(ct);
@@ -70,6 +72,7 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
                 AssignedUser = c.AssignedUser != null ? c.AssignedUser.FullName : null,
                 c.NextFollowUpDate,
                 c.CreatedAt,
+                Outstanding = db.Bookings.Where(b => b.CustomerId == c.Id).Sum(b => b.Balance),
                 NextBooking = db.Bookings
                     .Where(b => b.CustomerId == c.Id && b.Status == BookingStatus.Booked && b.BookingDate >= today)
                     .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime)
@@ -82,7 +85,7 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
         var consultations = await ConsultationsAsync(rows.Select(r => r.Id).ToList(), ct);
         var items = rows.Select(r => new CustomerListItemDto(
             r.Id, r.Name, Phone(r.WhatsAppNumber), r.InstagramName, r.Stage, consultations[r.Id], r.Treatments,
-            r.LeadSource, r.AssignedUser, r.NextFollowUpDate, r.NextBooking, r.CreatedAt)).ToList();
+            r.LeadSource, r.AssignedUser, r.NextFollowUpDate, r.NextBooking, r.CreatedAt, r.Outstanding)).ToList();
         return new PagedResult<CustomerListItemDto>(items, page, size, total);
     }
 
@@ -185,7 +188,8 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
             c.AssignedUser is null ? null : new NamedRef(c.AssignedUser.Id, c.AssignedUser.FullName),
             c.LastContactDate, c.NextFollowUpDate, c.Notes, c.IsActive,
             c.Treatments.OrderBy(t => t.Treatment.DisplayOrder).Select(t => new NamedRef(t.TreatmentId, t.Treatment.Name)).ToList(),
-            customFields, c.CreatedAt, c.UpdatedAt);
+            customFields, c.CreatedAt, c.UpdatedAt,
+            await db.Bookings.Where(b => b.CustomerId == c.Id).SumAsync(b => b.Balance, ct));
     }
 
     public async Task<CustomerDetailDto> CreateAsync(SaveCustomerRequest request, int? userId, CancellationToken ct)

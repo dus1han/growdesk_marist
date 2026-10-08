@@ -1,3 +1,4 @@
+using DoctorCrm.Api.Authentication;
 using DoctorCrm.Api.Authorization;
 using DoctorCrm.Api.Data;
 using DoctorCrm.Api.DTOs;
@@ -12,14 +13,22 @@ namespace DoctorCrm.Api.Controllers;
 [HasPermission(Permissions.CustomersView)]
 public class CustomersController(CustomerService customers) : ControllerBase
 {
+    /// <summary>Money owed is shown only to users who can see payments.</summary>
+    private bool CanSeePayments => User.HasClaim(CrmClaims.Permission, Permissions.PaymentsView);
+
     /// <summary>Paged, searchable, filterable customer list. Filters combine.</summary>
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<PagedResult<CustomerListItemDto>>>> List([FromQuery] CustomerQuery query, CancellationToken ct) =>
-        Ok(ApiResponse<PagedResult<CustomerListItemDto>>.Ok(await customers.ListAsync(query, ct)));
+    public async Task<ActionResult<ApiResponse<PagedResult<CustomerListItemDto>>>> List([FromQuery] CustomerQuery query, CancellationToken ct)
+    {
+        if (!CanSeePayments) query.HasOutstanding = null;
+        var page = await customers.ListAsync(query, ct);
+        if (!CanSeePayments) page = page with { Items = page.Items.Select(c => c with { Outstanding = null }).ToList() };
+        return Ok(ApiResponse<PagedResult<CustomerListItemDto>>.Ok(page));
+    }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ApiResponse<CustomerDetailDto>>> Get(int id, CancellationToken ct) =>
-        Ok(ApiResponse<CustomerDetailDto>.Ok(await customers.GetAsync(id, ct)));
+        Ok(ApiResponse<CustomerDetailDto>.Ok(await WithoutMoneyUnlessAllowed(customers.GetAsync(id, ct))));
 
     [HttpGet("{id:int}/activity")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<ActivityDto>>>> Activity(int id, CancellationToken ct) =>
@@ -29,12 +38,15 @@ public class CustomersController(CustomerService customers) : ControllerBase
     [HttpPost]
     [HasPermission(Permissions.CustomersManage)]
     public async Task<ActionResult<ApiResponse<CustomerDetailDto>>> Create(SaveCustomerRequest request, CancellationToken ct) =>
-        Ok(ApiResponse<CustomerDetailDto>.Ok(await customers.CreateAsync(request, User.GetUserId(), ct), "Customer created."));
+        Ok(ApiResponse<CustomerDetailDto>.Ok(await WithoutMoneyUnlessAllowed(customers.CreateAsync(request, User.GetUserId(), ct)), "Customer created."));
 
     [HttpPut("{id:int}")]
     [HasPermission(Permissions.CustomersManage)]
     public async Task<ActionResult<ApiResponse<CustomerDetailDto>>> Update(int id, SaveCustomerRequest request, CancellationToken ct) =>
-        Ok(ApiResponse<CustomerDetailDto>.Ok(await customers.UpdateAsync(id, request, User.GetUserId(), ct), "Customer saved."));
+        Ok(ApiResponse<CustomerDetailDto>.Ok(await WithoutMoneyUnlessAllowed(customers.UpdateAsync(id, request, User.GetUserId(), ct)), "Customer saved."));
+
+    private async Task<CustomerDetailDto> WithoutMoneyUnlessAllowed(Task<CustomerDetailDto> customer) =>
+        CanSeePayments ? await customer : await customer with { Outstanding = null };
 }
 
 /// <summary>Active users for "Assigned to" pickers. Anyone who can see customers can see this list.</summary>

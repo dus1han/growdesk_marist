@@ -36,6 +36,15 @@ public class Booking : AuditableEntity
     /// <summary>Entered when the consultation is completed. Always 0 for a rescheduled booking.</summary>
     public decimal? ConsultationCharge { get; set; }
 
+    /// <summary>Total received so far (Paid entries). Kept in step by <see cref="Services.BookingMoney"/>.</summary>
+    public decimal AmountPaid { get; set; }
+
+    /// <summary>
+    /// Still owed on a completed consultation: charge − paid − waived, never below 0. What the
+    /// customer's outstanding adds up. Kept in step by <see cref="Services.BookingMoney"/>.
+    /// </summary>
+    public decimal Balance { get; set; }
+
     public string? DoctorNotes { get; set; }
 
     /// <summary>Both set or both empty (spec §24).</summary>
@@ -74,10 +83,19 @@ public class BookingTreatment
     public Treatment Treatment { get; set; } = null!;
 }
 
+/// <summary>What a payment entry is.</summary>
 public enum PaymentStatus
 {
+    /// <summary>Money received: the whole balance or part of it.</summary>
     Paid,
+
+    /// <summary>
+    /// Entries made before part payments: "nothing received yet", carrying the full charge. No
+    /// longer created; ignored by balances and lists (what is owed is the booking's Balance).
+    /// </summary>
     Pending,
+
+    /// <summary>The remaining balance written off.</summary>
     Waived,
 }
 

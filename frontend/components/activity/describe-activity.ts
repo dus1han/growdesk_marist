@@ -55,8 +55,21 @@ function describeAction(a: Pick<Activity, "action" | "details">): ActivityView {
     }
     case "Booking Created":
       return { icon: CalendarPlus, title: "Consultation booked", detail: d.date ? `for ${formatDate(String(d.date))}` : undefined, tone: "bg-brand-soft text-brand" };
-    case "Consultation Completed":
-      return { icon: Check, title: "Consultation completed", detail: d.payment ? `Payment ${String(d.payment).toLowerCase()}` : undefined, tone: "bg-emerald-50 text-emerald-600" };
+    case "Consultation Completed": {
+      // Since part payments: charge / paid / balance. Older entries carry a payment state instead.
+      const balance = typeof d.balance === "number" ? d.balance : null;
+      const detail =
+        balance !== null
+          ? balance > 0
+            ? `Balance ${formatMoney(balance)}`
+            : typeof d.charge === "number" && d.charge > 0
+              ? "Paid in full"
+              : undefined
+          : d.payment
+            ? `Payment ${String(d.payment).toLowerCase()}`
+            : undefined;
+      return { icon: Check, title: "Consultation completed", detail, tone: "bg-emerald-50 text-emerald-600" };
+    }
     case "Booking Rescheduled": {
       const to = d.to as { date?: string } | undefined;
       return { icon: CalendarPlus, title: "Appointment rescheduled", detail: to?.date ? `to ${formatDate(to.date)}` : undefined, tone: "bg-amber-50 text-amber-600" };
@@ -70,10 +83,22 @@ function describeAction(a: Pick<Activity, "action" | "details">): ActivityView {
       return {
         icon: Wallet,
         title: d.settledPending ? "Pending payment received" : "Payment recorded",
-        detail: amount !== null ? formatMoney(amount) : undefined,
+        detail:
+          amount !== null
+            ? typeof d.balance === "number" && d.balance > 0
+              ? `${formatMoney(amount)} · ${formatMoney(d.balance)} still owed`
+              : formatMoney(amount)
+            : undefined,
         tone: "bg-emerald-50 text-emerald-600",
       };
     }
+    case "Balance Waived":
+      return {
+        icon: Wallet,
+        title: "Balance waived",
+        detail: typeof d.amount === "number" ? formatMoney(d.amount) : undefined,
+        tone: "bg-slate-100 text-slate-500",
+      };
     case "Booking Updated":
       return { icon: UserRoundPen, title: "Booking updated", tone: "bg-sky-50 text-sky-600" };
     case "Customer Updated": {

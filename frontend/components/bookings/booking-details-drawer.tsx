@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, CalendarClock, Check, CircleCheck, Pencil, Stethoscope, StickyNote, UserX, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type UseFormRegisterReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { StageBadge } from "@/components/customers/stage-badge";
@@ -17,6 +17,7 @@ import { toastError } from "@/lib/api/admin";
 import { useBooking, useBookingActions, useDoctorOptions, useLocale } from "@/lib/api/bookings";
 import { ApiError } from "@/lib/api/client";
 import { useActiveLookup } from "@/lib/api/customers";
+import { useWaiveBalance } from "@/lib/api/payments";
 import { useSession } from "@/lib/auth/session";
 import { formatDate, today } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
@@ -137,7 +138,6 @@ function Details({
   const canRecordPayment = can(session?.user, Permission.PaymentsManage);
   const canComplete = can(session?.user, Permission.BookingsComplete);
   const isBooked = booking.status === "Booked";
-  const payment = booking.payments[0];
   const started = booking.date <= (locale?.today ?? today());
 
   return (
@@ -203,28 +203,31 @@ function Details({
 
       {booking.status === "Completed" && (
         <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-emerald-800">Consultation charge</p>
-            <p className="font-display text-lg font-bold">{formatMoney(booking.consultationCharge, locale?.currency)}</p>
-          </div>
+          <MoneySummary booking={booking} currency={locale?.currency} />
           {booking.payments.length > 0 && (
-            <ul className="space-y-1.5">
-              {booking.payments.map((p, i) => (
-                <li key={p.id} className={cn("flex items-center justify-between gap-2 text-sm", i > 0 && "text-muted")}>
-                  <span>
-                    <span className="font-semibold">{p.status}</span>
-                    {p.method && ` · ${p.method.name}`}
-                    {p.paymentDate && ` · ${formatDateTime(p.paymentDate)}`}
+            <ul className="space-y-1.5 border-t border-emerald-100 pt-3">
+              {booking.payments.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0">
+                    <span className="font-semibold">{p.status === "Waived" ? "Waived" : "Paid"}</span>
+                    <span className="text-muted">
+                      {p.method && ` · ${p.method.name}`} · {formatDateTime(p.paymentDate ?? p.createdAt)}
+                    </span>
                   </span>
-                  {i > 0 && <span className="text-xs">earlier</span>}
+                  <span className={cn("shrink-0 font-semibold tabular-nums", p.status === "Waived" && "text-muted")}>
+                    {formatMoney(p.amount, locale?.currency)}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-          {payment?.status === "Pending" && canRecordPayment && (
-            <Button size="sm" onClick={() => setRecording(true)}>
-              Record payment
-            </Button>
+          {booking.balance > 0 && canRecordPayment && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={() => setRecording(true)}>
+                Record payment
+              </Button>
+              <WaiveBalance bookingId={booking.id} balance={booking.balance} currency={locale?.currency} />
+            </div>
           )}
           {booking.nextTreatment && booking.nextTreatmentDate && (
             <p className="text-sm">
@@ -318,10 +321,81 @@ function Details({
         {booking.source && <> by {booking.source}</>}
       </p>
       <RecordPaymentDrawer
-        pending={recording && payment ? { bookingId: booking.id, customerName: booking.customer.name, amount: payment.amount } : null}
+        pending={recording && booking.balance > 0 ? { bookingId: booking.id, customerName: booking.customer.name, amount: booking.balance } : null}
         onClose={() => setRecording(false)}
       />
     </div>
+  );
+}
+
+/** Amount, paid and balance at a glance. */
+function MoneySummary({ booking, currency }: { booking: BookingDetail; currency?: string }) {
+  const owed = booking.balance > 0;
+  const cells = [
+    { label: "Amount", value: formatMoney(booking.consultationCharge, currency), tone: "" },
+    { label: "Paid", value: formatMoney(booking.amountPaid, currency), tone: "" },
+    {
+      label: "Balance",
+      value: formatMoney(booking.balance, currency),
+      tone: owed ? "text-amber-700" : "text-emerald-700",
+    },
+  ];
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-2">
+        {cells.map((c) => (
+          <div key={c.label} className="min-w-0">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-emerald-800/70">{c.label}</p>
+            <p className={cn("font-display text-base font-bold tabular-nums sm:text-lg", c.tone)}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className={cn("mt-1 text-xs font-medium", owed ? "text-amber-700" : "text-emerald-700")}>
+        {PAYMENT_STATE_TEXT[booking.paymentStatus ?? "Paid"]}
+      </p>
+    </div>
+  );
+}
+
+const PAYMENT_STATE_TEXT: Record<NonNullable<BookingDetail["paymentStatus"]>, string> = {
+  Paid: "Paid in full",
+  PartlyPaid: "Partly paid: the balance is still owed",
+  Unpaid: "Not paid yet",
+  Waived: "Balance waived",
+  NoCharge: "No charge",
+};
+
+/** Writes off the remaining balance, after a confirmation. */
+function WaiveBalance({ bookingId, balance, currency }: { bookingId: number; balance: number; currency?: string }) {
+  const waive = useWaiveBalance();
+  const [asking, setAsking] = useState(false);
+  if (!asking)
+    return (
+      <Button size="sm" variant="ghost" onClick={() => setAsking(true)}>
+        Waive balance
+      </Button>
+    );
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted">Waive {formatMoney(balance, currency)}?</span>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={waive.isPending}
+        onClick={() =>
+          waive.mutate(bookingId, {
+            onSuccess: () => toast.success(`${formatMoney(balance, currency)} waived`),
+            onError: toastError,
+            onSettled: () => setAsking(false),
+          })
+        }
+      >
+        {waive.isPending ? "Waiving…" : "Yes, waive"}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>
+        Keep
+      </Button>
+    </span>
   );
 }
 
@@ -381,13 +455,11 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
 
 // ---- Complete ----------------------------------------------------------------------------------------
 
-const PAYMENT_STATUSES = ["Paid", "Pending", "Waived"] as const;
-
 /** Spec §24: next treatment date and treatment are both empty or both filled. Mirrors the backend. */
 const completeSchema = z
   .object({
-    consultationCharge: z.number({ error: "Enter the charge (0 if free)." }).min(0, "The charge can't be negative."),
-    paymentStatus: z.enum(PAYMENT_STATUSES),
+    consultationCharge: z.number({ error: "Enter the consultation amount (0 if free)." }).min(0, "The amount can't be negative."),
+    paidAmount: z.number({ error: "Enter the amount paid (0 if nothing yet)." }).min(0, "The paid amount can't be negative."),
     paymentMethodId: z.number().nullable(),
     nextTreatmentDate: z.string(),
     nextTreatmentId: z.number().nullable(),
@@ -399,7 +471,9 @@ const completeSchema = z
   .superRefine((v, ctx) => {
     if (v.needsTreatment && v.treatmentIds.length === 0)
       ctx.addIssue({ code: "custom", path: ["treatmentIds"], message: "Choose the treatment for this consultation." });
-    if (v.paymentStatus === "Paid" && v.paymentMethodId === null)
+    if (v.paidAmount > v.consultationCharge)
+      ctx.addIssue({ code: "custom", path: ["paidAmount"], message: "The paid amount can't be more than the consultation amount." });
+    if (v.paidAmount > 0 && v.paymentMethodId === null)
       ctx.addIssue({ code: "custom", path: ["paymentMethodId"], message: "Choose how the customer paid." });
     if (v.nextTreatmentDate && v.nextTreatmentId === null)
       ctx.addIssue({ code: "custom", path: ["nextTreatmentId"], message: "Choose the next treatment, or clear the date." });
@@ -425,7 +499,6 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
   } = useForm<CompleteValues>({
     resolver: zodResolver(completeSchema),
     defaultValues: {
-      paymentStatus: "Paid",
       paymentMethodId: null,
       nextTreatmentDate: "",
       nextTreatmentId: null,
@@ -434,7 +507,9 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
       needsTreatment: booking.treatments.length === 0,
     },
   });
-  const status = useWatch({ control, name: "paymentStatus" });
+  const charge = useWatch({ control, name: "consultationCharge" });
+  const paid = useWatch({ control, name: "paidAmount" });
+  const paidSomething = Number.isFinite(paid) && paid > 0;
   const chosenTreatments = useWatch({ control, name: "treatmentIds" });
 
   const onSubmit = handleSubmit(async (v) => {
@@ -442,8 +517,8 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
       await complete.mutateAsync({
         id: booking.id,
         consultationCharge: v.consultationCharge,
-        paymentStatus: v.paymentStatus,
-        paymentMethodId: v.paymentStatus === "Waived" ? null : v.paymentMethodId,
+        paidAmount: v.paidAmount,
+        paymentMethodId: v.paidAmount > 0 ? v.paymentMethodId : null,
         nextTreatmentDate: v.nextTreatmentDate || null,
         nextTreatmentId: v.nextTreatmentId,
         doctorNotes: v.doctorNotes || null,
@@ -507,45 +582,39 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
         </NoteCard>
       )}
 
-      <Field label="Consultation charge" required error={errors.consultationCharge?.message}>
-        {(p) => (
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">
-              {locale?.currency ?? "AED"}
-            </span>
-            <Input {...p} type="number" inputMode="decimal" min={0} step="0.01" autoFocus className="pl-14 text-base font-semibold" {...register("consultationCharge", { valueAsNumber: true })} />
-          </div>
-        )}
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <MoneyInput
+          label="Consultation amount"
+          currency={locale?.currency}
+          error={errors.consultationCharge?.message}
+          autoFocus
+          registration={register("consultationCharge", { valueAsNumber: true })}
+        />
+        <MoneyInput
+          label="Paid amount"
+          currency={locale?.currency}
+          error={errors.paidAmount?.message}
+          registration={register("paidAmount", { valueAsNumber: true })}
+          action={
+            Number.isFinite(charge) && charge > 0 ? (
+              <button
+                type="button"
+                onClick={() => setValue("paidAmount", charge, { shouldValidate: true })}
+                className="text-xs font-semibold text-brand hover:text-brand-strong"
+              >
+                Paid in full
+              </button>
+            ) : undefined
+          }
+        />
+      </div>
 
-      <fieldset>
-        <legend className="mb-2 text-[13px] font-medium">
-          Payment
-          <RequiredMark />
-        </legend>
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-muted p-1" role="radiogroup" aria-label="Payment status">
-          {PAYMENT_STATUSES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={status === s}
-              onClick={() => setValue("paymentStatus", s, { shouldValidate: false })}
-              className={cn("relative rounded-lg py-2 text-sm font-medium transition-colors", status === s ? "text-foreground" : "text-muted hover:text-foreground")}
-            >
-              {status === s && (
-                <motion.span layoutId="payment-status" className="absolute inset-0 rounded-lg bg-surface shadow-card" transition={{ type: "spring", stiffness: 500, damping: 38 }} />
-              )}
-              <span className="relative">{s}</span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <BalancePreview charge={charge} paid={paid} currency={locale?.currency} />
 
       <AnimatePresence initial={false}>
-        {status !== "Waived" && (
+        {paidSomething && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <Field label="Payment method" optional={status === "Pending"} required={status !== "Pending"} error={errors.paymentMethodId?.message}>
+            <Field label="Payment method" required error={errors.paymentMethodId?.message}>
               {(p) => (
                 <Select {...p} {...register("paymentMethodId", { setValueAs: idOrNull })}>
                   <option value="">Choose…</option>
@@ -590,6 +659,71 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
   );
 }
 
+/** A money field with the currency in front and an optional action (e.g. "Paid in full") by the label. */
+function MoneyInput({
+  label,
+  currency,
+  error,
+  registration,
+  autoFocus,
+  action,
+}: {
+  label: string;
+  currency?: string;
+  error?: string;
+  registration: UseFormRegisterReturn;
+  autoFocus?: boolean;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      {action && <span className="absolute right-0 top-0">{action}</span>}
+      <Field label={label} required error={error}>
+        {(p) => (
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">
+              {currency ?? "AED"}
+            </span>
+            <Input {...p} type="number" inputMode="decimal" min={0} step="0.01" autoFocus={autoFocus} className="pl-14 text-base font-semibold" {...registration} />
+          </div>
+        )}
+      </Field>
+    </div>
+  );
+}
+
+/** Balance = amount − paid, worked out as they type. */
+function BalancePreview({ charge, paid, currency }: { charge: number; paid: number; currency?: string }) {
+  if (!Number.isFinite(charge)) return null;
+  const paidNow = Number.isFinite(paid) ? paid : 0;
+  const balance = Math.round((charge - paidNow) * 100) / 100;
+  const over = balance < 0;
+  return (
+    <motion.div
+      layout
+      className={cn(
+        "flex items-center justify-between rounded-xl border px-4 py-3",
+        over ? "border-red-200 bg-red-50" : balance > 0 ? "border-amber-200 bg-amber-50/70" : "border-emerald-200 bg-emerald-50/70",
+      )}
+    >
+      <div>
+        <p className="text-sm font-semibold">Balance</p>
+        <p className={cn("text-xs", over ? "text-red-700" : balance > 0 ? "text-amber-700" : "text-emerald-700")}>
+          {over ? "More than the consultation amount" : balance > 0 ? "Owed: can be paid later or waived" : charge > 0 ? "Paid in full" : "No charge"}
+        </p>
+      </div>
+      <motion.p
+        key={balance}
+        initial={{ opacity: 0.4, y: -3 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={cn("font-display text-xl font-bold tabular-nums", over ? "text-red-700" : balance > 0 ? "text-amber-700" : "text-emerald-700")}
+      >
+        {formatMoney(Math.max(balance, 0), currency)}
+      </motion.p>
+    </motion.div>
+  );
+}
+
 function Done({ booking, onContinue }: { booking: BookingDetail; onContinue: () => void }) {
   const { data: locale } = useLocale();
   return (
@@ -613,7 +747,12 @@ function Done({ booking, onContinue }: { booking: BookingDetail; onContinue: () 
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <p className="mt-6 font-display text-xl font-bold">Consultation completed</p>
         <p className="mt-1 text-sm text-muted">
-          {booking.customer.name} · {formatMoney(booking.consultationCharge, locale?.currency)} {booking.payments[0]?.status.toLowerCase()}
+          {booking.customer.name} · {formatMoney(booking.consultationCharge, locale?.currency)}
+          {booking.balance > 0
+            ? ` · ${formatMoney(booking.balance, locale?.currency)} still owed`
+            : booking.paymentStatus === "Paid"
+              ? " paid in full"
+              : ""}
         </p>
         {booking.customerStage.systemKey === "customer" && (
           <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted">

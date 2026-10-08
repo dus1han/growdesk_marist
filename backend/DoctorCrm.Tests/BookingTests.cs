@@ -116,7 +116,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         var booking = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, day, T(12), T(12, 30), [treatments[0].Id])));
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
 
-        var request = new CompleteBookingRequest(250, "Paid", methods[0].Id,
+        var request = new CompleteBookingRequest(250, 250, methods[0].Id,
             withDate ? day.AddDays(14) : null, withTreatment ? treatments[1].Id : null, null);
         var response = await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete", request);
 
@@ -142,12 +142,12 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
 
         // Paid needs a method.
         await FailAsync(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(300, "Paid", null, null, null, null)), HttpStatusCode.BadRequest);
+            new CompleteBookingRequest(300, 300, null, null, null, null)), HttpStatusCode.BadRequest);
         await FailAsync(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(-5, "Waived", null, null, null, null)), HttpStatusCode.BadRequest);
+            new CompleteBookingRequest(-5, 0, null, null, null, null)), HttpStatusCode.BadRequest);
 
         var done = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(300, "Paid", methods[0].Id, null, null, "Good candidate")));
+            new CompleteBookingRequest(300, 300, methods[0].Id, null, null, "Good candidate")));
         Assert.Equal("Completed", done.Status);
         Assert.Equal(300, done.ConsultationCharge);
         var payment = Assert.Single(done.Payments);
@@ -157,7 +157,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
 
         // A completed consultation is final.
         await FailAsync(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(300, "Paid", methods[0].Id, null, null, null)), HttpStatusCode.Conflict);
+            new CompleteBookingRequest(300, 300, methods[0].Id, null, null, null)), HttpStatusCode.Conflict);
         await FailAsync(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/reschedule",
             new RescheduleBookingRequest(NewDay(), T(9), T(9, 30), null)), HttpStatusCode.Conflict);
     }
@@ -237,10 +237,10 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
 
         var paid = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, day, T(9), T(9, 30), [treatments[0].Id])));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{paid.Id}/complete",
-            new CompleteBookingRequest(400, "Paid", methods[0].Id, null, null, null)));
+            new CompleteBookingRequest(400, 400, methods[0].Id, null, null, null)));
         var pending = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, day, T(10), T(10, 30), [treatments[1].Id])));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{pending.Id}/complete",
-            new CompleteBookingRequest(150, "Pending", null, null, null, null)));
+            new CompleteBookingRequest(150, 0, null, null, null, null)));
 
         var range = $"from={day:yyyy-MM-dd}&to={day:yyyy-MM-dd}";
         var byPayment = await DataAsync<PagedResult<BookingListItemDto>>(await admin.GetAsync($"/api/bookings?{range}&paymentStatus=Paid"));
@@ -295,7 +295,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync("/api/bookings",
             Book(customer.Id, NewDay(), T(9), T(9, 30), [treatments[0].Id]))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await staff.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(0, "Waived", null, null, null, null))).StatusCode);
+            new CompleteBookingRequest(0, 0, null, null, null, null))).StatusCode);
     }
 
     // ---- Status and the consultation column ------------------------------------------------------
@@ -337,7 +337,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
 
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{moved.Id}/complete",
-            new CompleteBookingRequest(200, "Paid", methods[0].Id, day.AddDays(20), treatments[0].Id, null)));
+            new CompleteBookingRequest(200, 200, methods[0].Id, day.AddDays(20), treatments[0].Id, null)));
         c = await CustomerAsync(admin, customer.Id);
         Assert.Equal("consulted", c.Consultation.State);
         Assert.Equal(day.AddDays(20), c.Consultation.NextTreatmentDate);
@@ -366,7 +366,7 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         Assert.Equal("lost", (await CustomerAsync(admin, customer.Id)).Stage.SystemKey);
 
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(0, "Waived", null, null, null, null)));
+            new CompleteBookingRequest(0, 0, null, null, null, null)));
         Assert.Equal("customer", (await CustomerAsync(admin, customer.Id)).Stage.SystemKey);
     }
 

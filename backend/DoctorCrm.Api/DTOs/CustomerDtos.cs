@@ -42,6 +42,8 @@ public class CustomerQuery
     public DateOnly? CreatedTo { get; set; }
     public DateOnly? FollowUpFrom { get; set; }
     public DateOnly? FollowUpTo { get; set; }
+    /// <summary>true: only customers who still owe money on a completed consultation.</summary>
+    public bool? HasOutstanding { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
@@ -58,7 +60,9 @@ public record CustomerListItemDto(
     string? AssignedUser,
     DateOnly? NextFollowUpDate,
     NextBookingDto? NextBooking,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    /// <summary>Total still owed on completed consultations; null for users who can't see payments.</summary>
+    decimal? Outstanding);
 
 public record NextBookingDto(int Id, DateOnly Date, TimeOnly StartTime);
 
@@ -86,7 +90,9 @@ public record CustomerDetailDto(
     IReadOnlyList<NamedRef> Treatments,
     IReadOnlyList<CustomFieldValueDto> CustomFields,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    /// <summary>Total still owed on completed consultations; null for users who can't see payments.</summary>
+    decimal? Outstanding);
 
 public record SaveCustomerRequest(
     string Name,

@@ -224,8 +224,10 @@ export function BookingList({ onOpen, onBook, initialTab = "upcoming" }: { onOpe
                 value={filters.payment}
                 onChange={(v) => setFilter({ payment: v })}
                 options={[
+                  { value: "Outstanding", label: "Owes money" },
                   { value: "Paid", label: "Paid" },
-                  { value: "Pending", label: "Pending" },
+                  { value: "PartlyPaid", label: "Partly paid" },
+                  { value: "Unpaid", label: "Unpaid" },
                   { value: "Waived", label: "Waived" },
                 ]}
               />
@@ -324,7 +326,8 @@ function BookingRow({ b, index, currency, onOpen }: { b: BookingListItem; index:
           {b.status === "Completed" && b.consultationCharge !== null && (
             <span className="text-xs text-muted">
               {formatMoney(b.consultationCharge, currency)}
-              {b.paymentStatus && b.paymentStatus !== "Paid" && ` · ${b.paymentStatus}`}
+              {b.balance > 0 && <span className="font-semibold text-amber-700"> · {formatMoney(b.balance, currency)} owed</span>}
+              {b.paymentStatus === "Waived" && " · waived"}
             </span>
           )}
         </div>

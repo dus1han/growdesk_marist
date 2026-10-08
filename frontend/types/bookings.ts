@@ -2,7 +2,11 @@
 import type { NamedRef, StageRef } from "./customers";
 
 export type BookingStatus = "Booked" | "Completed" | "Rescheduled" | "Cancelled" | "NoShow";
+/** A payment entry: money received, or a balance written off. ("Pending" only on old records.) */
 export type PaymentStatus = "Paid" | "Pending" | "Waived";
+
+/** Where a completed consultation's money stands (backend BookingMoney). */
+export type BookingPaymentState = "Paid" | "PartlyPaid" | "Unpaid" | "Waived" | "NoCharge";
 
 export interface BookingListItem {
   id: number;
@@ -14,7 +18,10 @@ export interface BookingListItem {
   status: BookingStatus;
   treatments: NamedRef[];
   consultationCharge: number | null;
-  paymentStatus: PaymentStatus | null;
+  amountPaid: number;
+  /** Still owed; 0 until completed. */
+  balance: number;
+  paymentStatus: BookingPaymentState | null;
 }
 
 export interface Payment {
@@ -47,6 +54,9 @@ export interface BookingDetail {
   treatments: NamedRef[];
   notes: string | null;
   consultationCharge: number | null;
+  amountPaid: number;
+  balance: number;
+  paymentStatus: BookingPaymentState | null;
   doctorNotes: string | null;
   nextTreatmentDate: string | null;
   nextTreatment: NamedRef | null;

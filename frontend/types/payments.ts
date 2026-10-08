@@ -12,7 +12,20 @@ export interface PaymentListItem {
   paymentDate: string | null;
   createdAt: string;
   recordedBy: string | null;
-  isCurrent: boolean;
+  /** What the consultation still owes now. */
+  bookingBalance: number;
+}
+
+/** A completed consultation that still has a balance. */
+export interface OutstandingItem {
+  bookingId: number;
+  customer: NamedRef;
+  date: string;
+  startTime: string;
+  treatments: string[];
+  charge: number;
+  paid: number;
+  balance: number;
 }
 
 export interface PaymentSummary {
@@ -32,7 +45,6 @@ export interface PaymentQuery {
   paymentMethodId?: number;
   customerId?: number;
   search?: string;
-  currentOnly?: boolean;
   page?: number;
   pageSize?: number;
 }

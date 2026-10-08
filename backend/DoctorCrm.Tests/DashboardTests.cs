@@ -50,7 +50,7 @@ public class DashboardTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await BookAsync(today.AddDays(1), 10);
 
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{completed}/complete",
-            new CompleteBookingRequest(200, "Paid", (await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods")))[0].Id, null, null, null)));
+            new CompleteBookingRequest(200, 200, (await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods")))[0].Id, null, null, null)));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{cancelled}/cancel",
             new CancelBookingRequest(reasons[0].Id, null)));
 
@@ -104,9 +104,9 @@ public class DashboardTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var booking = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings",
             new CreateBookingRequest(c.Id, null, today.AddDays(-3), new TimeOnly(12, 0), new TimeOnly(12, 30), [treatments[0].Id], null)));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
-            new CompleteBookingRequest(90, "Pending", null, null, null, null)));
+            new CompleteBookingRequest(90, 0, null, null, null, null)));
         await DataAsync<PaymentListItemDto>(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/payments",
-            new RecordPaymentRequest(methods[0].Id, null)));
+            new RecordPaymentRequest(90, methods[0].Id, null)));
 
         var latest = (await DataAsync<DashboardDto>(await admin.GetAsync("/api/dashboard"))).Activity!.First();
         Assert.Equal("Payment Recorded", latest.Action);
