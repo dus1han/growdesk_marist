@@ -33,8 +33,8 @@ public class AuditLogService(AppDbContext db, ClinicClock clock)
             query = query.Where(a =>
                 (a.User != null && (EF.Functions.ILike(a.User.FullName, like) || EF.Functions.ILike(a.User.Username, like)))
                 || EF.Functions.ILike(a.Action, like)
-                || (a.EntityType == nameof(Customer) && db.Customers.Any(c => c.Id.ToString() == a.EntityId && EF.Functions.ILike(c.Name, like)))
-                || (a.EntityType == nameof(Booking) && db.Bookings.Any(b => b.Id.ToString() == a.EntityId && EF.Functions.ILike(b.Customer.Name, like))));
+                || (a.EntityType == nameof(Customer) && db.Customers.IgnoreQueryFilters().Any(c => c.Id.ToString() == a.EntityId && EF.Functions.ILike(c.Name, like)))
+                || (a.EntityType == nameof(Booking) && db.Bookings.IgnoreQueryFilters().Any(b => b.Id.ToString() == a.EntityId && EF.Functions.ILike(b.Customer.Name, like))));
         }
 
         var total = await query.CountAsync(ct);
@@ -50,9 +50,10 @@ public class AuditLogService(AppDbContext db, ClinicClock clock)
         var customerIds = Ids(nameof(Customer));
         var bookingIds = Ids(nameof(Booking));
         var userIds = Ids(nameof(User));
-        var customers = await db.Customers.AsNoTracking().Where(c => customerIds.Contains(c.Id))
+        // Deleted records are still named: the log is the history of what happened to them.
+        var customers = await db.Customers.AsNoTracking().IgnoreQueryFilters().Where(c => customerIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
-        var bookings = await db.Bookings.AsNoTracking().Where(b => bookingIds.Contains(b.Id))
+        var bookings = await db.Bookings.AsNoTracking().IgnoreQueryFilters().Where(b => bookingIds.Contains(b.Id))
             .Select(b => new { b.Id, b.CustomerId, b.Customer.Name })
             .ToDictionaryAsync(b => b.Id, ct);
         var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))

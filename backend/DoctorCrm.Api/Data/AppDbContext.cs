@@ -83,7 +83,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<Treatment>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(150).IsRequired();
-            e.HasIndex(x => x.Name).IsUnique();
+            e.HasIndex(x => x.Name).IsUnique().HasFilter("deleted_at IS NULL");
             e.Property(x => x.Description).HasMaxLength(1000);
             e.HasIndex(x => x.DisplayOrder);
         });
@@ -131,8 +131,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Notes).HasMaxLength(4000);
 
             // Duplicate detection (spec §35): unique when present.
-            e.HasIndex(x => x.WhatsAppNumber).IsUnique().HasFilter("whats_app_number IS NOT NULL");
-            e.HasIndex(x => x.InstagramName).IsUnique().HasFilter("instagram_name IS NOT NULL");
+            // A customer in the recycle bin doesn't hold their number: the same person can be captured again.
+            e.HasIndex(x => x.WhatsAppNumber).IsUnique().HasFilter("whats_app_number IS NOT NULL AND deleted_at IS NULL");
+            e.HasIndex(x => x.InstagramName).IsUnique().HasFilter("instagram_name IS NOT NULL AND deleted_at IS NULL");
             e.HasIndex(x => x.StageId);
             e.HasIndex(x => x.CreatedAt);
             e.HasIndex(x => x.NextFollowUpDate);
@@ -266,6 +267,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.CreatedAt);
             e.HasIndex(x => new { x.EntityType, x.EntityId });
         });
+
+        HideDeleted(b);
+    }
+
+    /// <summary>Hides records in the recycle bin from every query (<see cref="ISoftDeletable"/>).</summary>
+    private static void HideDeleted(ModelBuilder b)
+    {
+        foreach (var type in b.Model.GetEntityTypes().Where(t => typeof(ISoftDeletable).IsAssignableFrom(t.ClrType)).ToList())
+        {
+            var e = System.Linq.Expressions.Expression.Parameter(type.ClrType, "e");
+            var notDeleted = System.Linq.Expressions.Expression.Equal(
+                System.Linq.Expressions.Expression.Property(e, nameof(ISoftDeletable.DeletedAt)),
+                System.Linq.Expressions.Expression.Constant(null, typeof(DateTime?)));
+            b.Entity(type.ClrType).HasQueryFilter(System.Linq.Expressions.Expression.Lambda(notDeleted, e));
+        }
     }
 
     private static void ConfigureSimpleLookup<T>(ModelBuilder b) where T : class, ILookupEntity =>

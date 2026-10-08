@@ -64,6 +64,15 @@ public class BookingsController(BookingService bookings, BookingExportService ex
     [HasPermission(Permissions.BookingsManage)]
     public async Task<ActionResult<ApiResponse<BookingDetailDto>>> NoShow(int id, CancellationToken ct) =>
         Ok(ApiResponse<BookingDetailDto>.Ok(await bookings.MarkNoShowAsync(id, User.GetUserId(), ct), "Marked as no-show."));
+
+    /// <summary>To the recycle bin. Only once the booking has no payments left.</summary>
+    [HttpDelete("{id:int}")]
+    [HasPermission(Permissions.RecordsDelete)]
+    public async Task<ActionResult<ApiResponse<object>>> Delete(int id, [FromServices] RecycleBinService bin, CancellationToken ct)
+    {
+        await bin.DeleteBookingAsync(id, User.GetUserId()!.Value, ct);
+        return Ok(ApiResponse.Ok("Booking deleted."));
+    }
 }
 
 /// <summary>Active users in the Doctor role, for the booking form and calendar filter.</summary>

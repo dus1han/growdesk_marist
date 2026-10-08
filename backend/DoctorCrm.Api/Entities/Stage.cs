@@ -5,9 +5,13 @@ namespace DoctorCrm.Api.Entities;
 /// own judgement, set by staff. Where a customer is with consultations is not a status: it is
 /// worked out from their bookings (see ConsultationDto).
 /// </summary>
-public class Stage : AuditableEntity, ILookupEntity, IHasColor
+public class Stage : AuditableEntity, ILookupEntity, IHasColor, ISoftDeletable
 {
     public int Id { get; set; }
+
+    /// <summary>Set when deleted to the recycle bin (<see cref="ISoftDeletable"/>).</summary>
+    public DateTime? DeletedAt { get; set; }
+    public int? DeletedById { get; set; }
     public string Name { get; set; } = string.Empty;
 
     /// <summary>

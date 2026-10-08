@@ -1,9 +1,13 @@
 namespace DoctorCrm.Api.Entities;
 
 /// <summary>A potential or existing patient (spec §14, §39). Never deleted; see <see cref="IsActive"/>.</summary>
-public class Customer : AuditableEntity
+public class Customer : AuditableEntity, ISoftDeletable
 {
     public int Id { get; set; }
+
+    /// <summary>Set when deleted to the recycle bin (<see cref="ISoftDeletable"/>).</summary>
+    public DateTime? DeletedAt { get; set; }
+    public int? DeletedById { get; set; }
     public string Name { get; set; } = string.Empty;
 
     /// <summary>E.164 (e.g. "+971501234567"). Unique when present: the primary duplicate check.</summary>

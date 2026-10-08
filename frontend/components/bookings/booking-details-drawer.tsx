@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { StageBadge } from "@/components/customers/stage-badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Drawer } from "@/components/ui/drawer";
 import { Field, Input, RequiredMark, Select, Textarea } from "@/components/ui/form-controls";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +19,7 @@ import { useBooking, useBookingActions, useDoctorOptions, useLocale } from "@/li
 import { ApiError } from "@/lib/api/client";
 import { useActiveLookup } from "@/lib/api/customers";
 import { useWaiveBalance } from "@/lib/api/payments";
+import { useDeleteRecord } from "@/lib/api/recycle-bin";
 import { useSession } from "@/lib/auth/session";
 import { formatDate, today } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
@@ -137,6 +139,9 @@ function Details({
   const canManage = can(session?.user, Permission.BookingsManage);
   const canRecordPayment = can(session?.user, Permission.PaymentsManage);
   const canComplete = can(session?.user, Permission.BookingsComplete);
+  const canDelete = can(session?.user, Permission.RecordsDelete);
+  const deletePayment = useDeleteRecord("payment");
+  const deleteBooking = useDeleteRecord("booking");
   const isBooked = booking.status === "Booked";
   const started = booking.date <= (locale?.today ?? today());
 
@@ -214,8 +219,19 @@ function Details({
                       {p.method && ` · ${p.method.name}`} · {formatDateTime(p.paymentDate ?? p.createdAt)}
                     </span>
                   </span>
-                  <span className={cn("shrink-0 font-semibold tabular-nums", p.status === "Waived" && "text-muted")}>
-                    {formatMoney(p.amount, locale?.currency)}
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className={cn("font-semibold tabular-nums", p.status === "Waived" && "text-muted")}>
+                      {formatMoney(p.amount, locale?.currency)}
+                    </span>
+                    {canDelete && (
+                      <ConfirmDelete
+                        what={`the ${formatMoney(p.amount, locale?.currency)} payment`}
+                        pending={deletePayment.isPending}
+                        onConfirm={() =>
+                          deletePayment.mutate(p.id, { onSuccess: () => toast.success("Payment moved to the recycle bin") })
+                        }
+                      />
+                    )}
                   </span>
                 </li>
               ))}
@@ -316,10 +332,27 @@ function Details({
         </div>
       )}
 
-      <p className="text-xs text-muted">
-        Booked {formatDateTime(booking.createdAt)}
-        {booking.source && <> by {booking.source}</>}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted">
+          Booked {formatDateTime(booking.createdAt)}
+          {booking.source && <> by {booking.source}</>}
+        </p>
+        {canDelete && (
+          <ConfirmDelete
+            label="Delete booking"
+            what="this booking"
+            pending={deleteBooking.isPending}
+            onConfirm={() =>
+              deleteBooking.mutate(booking.id, {
+                onSuccess: () => {
+                  toast.success("Booking moved to the recycle bin");
+                  onClose();
+                },
+              })
+            }
+          />
+        )}
+      </div>
       <RecordPaymentDrawer
         pending={recording && booking.balance > 0 ? { bookingId: booking.id, customerName: booking.customer.name, amount: booking.balance } : null}
         onClose={() => setRecording(false)}

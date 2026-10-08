@@ -8,6 +8,7 @@ import {
   Megaphone,
   PanelTop,
   ScrollText,
+  Trash2,
   Sparkles,
   UserCog,
   Wallet,
@@ -35,5 +36,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: "/administration/payment-methods", title: "Payment Methods", description: "Cash, card, bank transfer and others", icon: Wallet, permission: Permission.SettingsManage },
   { href: "/administration/subscription", title: "Subscription", description: "Your GrowDesk plan, card on file and payment history", icon: CreditCard, permission: Permission.BillingManage },
   { href: "/administration/stripe-settings", title: "Stripe Settings", description: "Platform owners: Stripe keys, plan price and grace period", icon: KeyRound, permission: Permission.PlatformBilling },
+  { href: "/administration/recycle-bin", title: "Recycle Bin", description: "Deleted customers, bookings, payments and list items: restore them", icon: Trash2, permission: Permission.RecordsDelete },
   { href: "/administration/audit-log", title: "Audit Log", description: "Who did what and when: sign-ins, changes and settings", icon: ScrollText, permission: Permission.AuditView },
 ];

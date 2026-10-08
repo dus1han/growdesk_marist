@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BookingDetailsDrawer } from "@/components/bookings/booking-details-drawer";
@@ -32,11 +32,13 @@ import { ConsultationBadge } from "@/components/customers/consultation-badge";
 import { StageBadge } from "@/components/customers/stage-badge";
 import { RequirePermission } from "@/components/layout/require-permission";
 import { Button } from "@/components/ui/button";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toastError } from "@/lib/api/admin";
 import { useLocale } from "@/lib/api/bookings";
+import { useDeleteRecord } from "@/lib/api/recycle-bin";
 import { ApiError } from "@/lib/api/client";
 import { describeActivity } from "@/components/activity/describe-activity";
 import { toSavePayload, useActiveLookup, useCustomer, useCustomerActivity, useSaveCustomer } from "@/lib/api/customers";
@@ -222,7 +224,8 @@ function ProfileHeader({
             </div>
           </div>
         </div>
-        <div className="flex gap-2 self-start">
+        <div className="flex flex-wrap items-center justify-end gap-2 self-start">
+          <DeleteCustomer customer={customer} />
           {canManage && (
             <Button variant="secondary" onClick={onEdit}>
               <Pencil className="size-4" /> Edit
@@ -255,6 +258,32 @@ function ProfileHeader({
         {customer.email && <ContactPill icon={Mail} label={customer.email} href={`mailto:${customer.email}`} />}
       </div>
     </Card>
+  );
+}
+
+/**
+ * To the recycle bin. The API refuses while the customer still has bookings, and says so; delete
+ * those first (lowest level first), or restore from Administration → Recycle Bin.
+ */
+function DeleteCustomer({ customer }: { customer: CustomerDetail }) {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const remove = useDeleteRecord("customer");
+  if (!can(session?.user, Permission.RecordsDelete)) return null;
+  return (
+    <ConfirmDelete
+      label="Delete"
+      what={customer.name}
+      pending={remove.isPending}
+      onConfirm={() =>
+        remove.mutate(customer.id, {
+          onSuccess: () => {
+            toast.success(`${customer.name} moved to the recycle bin`);
+            router.push("/customers");
+          },
+        })
+      }
+    />
   );
 }
 

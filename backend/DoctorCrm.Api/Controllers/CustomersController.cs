@@ -45,6 +45,15 @@ public class CustomersController(CustomerService customers) : ControllerBase
     public async Task<ActionResult<ApiResponse<CustomerDetailDto>>> Update(int id, SaveCustomerRequest request, CancellationToken ct) =>
         Ok(ApiResponse<CustomerDetailDto>.Ok(await WithoutMoneyUnlessAllowed(customers.UpdateAsync(id, request, User.GetUserId(), ct)), "Customer saved."));
 
+    /// <summary>To the recycle bin. Only once the customer has no bookings left.</summary>
+    [HttpDelete("{id:int}")]
+    [HasPermission(Permissions.RecordsDelete)]
+    public async Task<ActionResult<ApiResponse<object>>> Delete(int id, [FromServices] RecycleBinService bin, CancellationToken ct)
+    {
+        await bin.DeleteCustomerAsync(id, User.GetUserId()!.Value, ct);
+        return Ok(ApiResponse.Ok("Customer deleted."));
+    }
+
     private async Task<CustomerDetailDto> WithoutMoneyUnlessAllowed(Task<CustomerDetailDto> customer) =>
         CanSeePayments ? await customer : await customer with { Outstanding = null };
 }

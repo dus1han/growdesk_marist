@@ -14,9 +14,13 @@ public enum BookingStatus
 /// deleted: cancelling, no-shows and rescheduling change the status, and a reschedule creates a
 /// new booking linked back through <see cref="OriginalBookingId"/>.
 /// </summary>
-public class Booking : AuditableEntity
+public class Booking : AuditableEntity, ISoftDeletable
 {
     public int Id { get; set; }
+
+    /// <summary>Set when deleted to the recycle bin (<see cref="ISoftDeletable"/>).</summary>
+    public DateTime? DeletedAt { get; set; }
+    public int? DeletedById { get; set; }
 
     public int CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;
@@ -103,9 +107,13 @@ public enum PaymentStatus
 /// A consultation payment (spec §28). The source of truth for payment state: bookings carry only
 /// the charge. Kept as separate rows so history stays traceable.
 /// </summary>
-public class Payment
+public class Payment : ISoftDeletable
 {
     public int Id { get; set; }
+
+    /// <summary>Set when deleted to the recycle bin (<see cref="ISoftDeletable"/>).</summary>
+    public DateTime? DeletedAt { get; set; }
+    public int? DeletedById { get; set; }
     public int BookingId { get; set; }
     public Booking Booking { get; set; } = null!;
     public int CustomerId { get; set; }

@@ -25,6 +25,15 @@ public class PaymentsController(PaymentService payments) : ControllerBase
     public async Task<ActionResult<ApiResponse<PagedResult<OutstandingItemDto>>>> Outstanding([FromQuery] OutstandingQuery query, CancellationToken ct) =>
         Ok(ApiResponse<PagedResult<OutstandingItemDto>>.Ok(await payments.OutstandingAsync(query, ct)));
 
+    /// <summary>To the recycle bin. The consultation's balance goes back up by the amount.</summary>
+    [HttpDelete("{id:int}")]
+    [HasPermission(Permissions.RecordsDelete)]
+    public async Task<ActionResult<ApiResponse<object>>> Delete(int id, [FromServices] RecycleBinService bin, CancellationToken ct)
+    {
+        await bin.DeletePaymentAsync(id, User.GetUserId()!.Value, ct);
+        return Ok(ApiResponse.Ok("Payment deleted."));
+    }
+
     /// <summary>The filtered list as an Excel workbook, with a total row.</summary>
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] PaymentQuery query, CancellationToken ct)

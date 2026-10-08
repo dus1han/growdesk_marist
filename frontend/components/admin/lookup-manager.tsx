@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Card } from "@/components/ui/card";
 import { Drawer } from "@/components/ui/drawer";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,10 +18,22 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api/client";
 import { toastError, useLookupAdmin, useLookupMutations, type LookupResource } from "@/lib/api/admin";
+import { useDeleteRecord, type RecordType } from "@/lib/api/recycle-bin";
+import { useSession } from "@/lib/auth/session";
+import { can, Permission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type { LookupItem } from "@/types/admin";
 import type { LucideIcon } from "lucide-react";
 import { SortableList } from "./sortable-list";
+
+/** The recycle bin's name for each admin list. */
+const RECORD_TYPE: Record<LookupResource, RecordType> = {
+  treatments: "treatment",
+  stages: "stage",
+  "lead-sources": "lead-source",
+  "payment-methods": "payment-method",
+  "cancellation-reasons": "cancellation-reason",
+};
 
 export const STAGE_COLORS = [
   "#6366F1", "#8B5CF6", "#EC4899", "#EF4444", "#F97316", "#F59E0B",
@@ -52,6 +65,9 @@ type FormValues = z.infer<typeof schema>;
 export function LookupManager({ resource, title, description, singular, icon, withDescription, withColor }: LookupManagerProps) {
   const { data: items, isPending, isError, refetch } = useLookupAdmin(resource);
   const { setActive, reorder } = useLookupMutations(resource);
+  const { data: session } = useSession();
+  const canDelete = can(session?.user, Permission.RecordsDelete);
+  const remove = useDeleteRecord(RECORD_TYPE[resource]);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<LookupItem | "new" | null>(null);
 
@@ -149,6 +165,13 @@ export function LookupManager({ resource, title, description, singular, icon, wi
                 >
                   <Pencil className="size-4" />
                 </button>
+                {canDelete && !item.systemKey && (
+                  <ConfirmDelete
+                    what={item.name}
+                    pending={remove.isPending}
+                    onConfirm={() => remove.mutate(item.id, { onSuccess: () => toast.success(`${item.name} moved to the recycle bin`) })}
+                  />
+                )}
                 <span
                   title={item.systemKey ? "Built in, so it can't be deactivated. You can rename it." : undefined}
                   className="flex shrink-0 items-center"

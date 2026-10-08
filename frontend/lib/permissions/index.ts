@@ -18,6 +18,7 @@ export const Permission = {
   SettingsManage: "admin.settings",
   AuditView: "admin.audit",
   BillingManage: "admin.billing",
+  RecordsDelete: "admin.delete",
   /** Platform owners only (never part of a role): Stripe Settings. */
   PlatformBilling: "platform.billing",
 } as const;

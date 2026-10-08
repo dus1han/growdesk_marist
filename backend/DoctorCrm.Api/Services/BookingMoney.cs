@@ -15,11 +15,12 @@ public static class BookingMoney
     /// <summary>"Outstanding": anything still owed, paid in part or not at all.</summary>
     public const string Outstanding = "Outstanding";
 
-    /// <summary>Recomputes the totals from the booking's (loaded) payment entries.</summary>
+    /// <summary>Recomputes the totals from the booking's (loaded) payment entries, leaving out deleted ones.</summary>
     public static void Recalculate(Booking booking)
     {
-        var paid = booking.Payments.Where(p => p.Status == PaymentStatus.Paid).Sum(p => p.Amount);
-        var waived = booking.Payments.Where(p => p.Status == PaymentStatus.Waived).Sum(p => p.Amount);
+        var live = booking.Payments.Where(p => p.DeletedAt == null).ToList();
+        var paid = live.Where(p => p.Status == PaymentStatus.Paid).Sum(p => p.Amount);
+        var waived = live.Where(p => p.Status == PaymentStatus.Waived).Sum(p => p.Amount);
         booking.AmountPaid = paid;
         booking.Balance = booking.Status == BookingStatus.Completed && booking.ConsultationCharge is { } charge
             ? Math.Max(0, charge - paid - waived)

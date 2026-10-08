@@ -23,6 +23,7 @@ public static class Permissions
     public const string SettingsManage = "admin.settings";
     public const string AuditView = "admin.audit";
     public const string BillingManage = "admin.billing";
+    public const string RecordsDelete = "admin.delete";
 
     public static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>
     {
@@ -39,6 +40,7 @@ public static class Permissions
         [SettingsManage] = "Manage treatments, stages, fields and settings",
         [AuditView] = "View the audit log",
         [BillingManage] = "Manage and pay the GrowDesk subscription",
+        [RecordsDelete] = "Delete records to the recycle bin and restore them",
     };
 
     public static IEnumerable<string> All => Descriptions.Keys;

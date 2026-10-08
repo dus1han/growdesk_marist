@@ -12,7 +12,7 @@ namespace DoctorCrm.Api.Controllers;
 /// </summary>
 [ApiController]
 public abstract class LookupControllerBase<T>(LookupService<T> service) : ControllerBase
-    where T : class, ILookupEntity, new()
+    where T : class, ILookupEntity, ISoftDeletable, new()
 {
     /// <summary>Active items in display order; <c>includeInactive=true</c> for the admin screens.</summary>
     [HttpGet]
@@ -36,6 +36,15 @@ public abstract class LookupControllerBase<T>(LookupService<T> service) : Contro
     [HasPermission(Permissions.SettingsManage)]
     public async Task<ActionResult<ApiResponse<LookupItemDto>>> SetActive(int id, SetActiveRequest request, CancellationToken ct) =>
         Ok(ApiResponse<LookupItemDto>.Ok(await service.SetActiveAsync(id, request.IsActive, User.GetUserId(), ct)));
+
+    /// <summary>To the recycle bin, once nothing uses it (otherwise deactivate it).</summary>
+    [HttpDelete("{id:int}")]
+    [HasPermission(Permissions.RecordsDelete)]
+    public async Task<ActionResult<ApiResponse<object>>> Delete(int id, [FromServices] RecycleBinService bin, CancellationToken ct)
+    {
+        await bin.DeleteLookupAsync<T>(id, User.GetUserId()!.Value, ct);
+        return Ok(ApiResponse.Ok($"{LookupService<T>.DisplayName} deleted."));
+    }
 
     /// <summary>Sets the display order. <c>ids</c> must list every item, active or not.</summary>
     [HttpPut("reorder")]
