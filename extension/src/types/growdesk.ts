@@ -64,6 +64,8 @@ export interface CaptureRequest {
   treatmentIds?: number[];
   customFields?: Record<string, string | number | number[] | boolean>;
   notes?: string;
+  /** The site captured on. GrowDesk sets the lead source from it. */
+  source?: 'whatsapp' | 'instagram';
 }
 
 export interface CaptureResult {

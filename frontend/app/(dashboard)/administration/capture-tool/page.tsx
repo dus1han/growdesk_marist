@@ -18,6 +18,9 @@ import { toastError, useCaptureFields, useSaveCaptureFields } from "@/lib/api/ad
 import { cn } from "@/lib/utils";
 import type { CaptureField } from "@/types/admin";
 
+/** Not chosen in the toolbar: GrowDesk sets it from the site (WhatsApp or Instagram). */
+const AUTOMATIC_FIELD = "lead_source";
+
 export default function CaptureToolPage() {
   const { data: saved, isPending, isError, refetch } = useCaptureFields();
   const save = useSaveCaptureFields();
@@ -89,6 +92,21 @@ export default function CaptureToolPage() {
               className="divide-y divide-line"
               renderItem={(f, handle) => {
                 const meta = fieldTypeMeta(f.type);
+                // GrowDesk Capture sets the lead source from the site it is used on (1.0.13+).
+                if (f.key === AUTOMATIC_FIELD)
+                  return (
+                    <div className="flex items-center gap-2 bg-surface px-2 py-2.5 sm:px-3">
+                      {handle}
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                        <meta.icon className="size-4" />
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 px-1">
+                        <span className="truncate text-sm font-medium">{f.label}</span>
+                        <Badge tone="brand">Automatic</Badge>
+                        <span className="text-xs text-muted">WhatsApp or Instagram, from the site the toolbar is used on</span>
+                      </div>
+                    </div>
+                  );
                 return (
                   <div className={cn("flex items-center gap-2 bg-surface px-2 py-2.5 sm:px-3", !f.isEnabled && "bg-surface-muted/40")}>
                     {handle}
@@ -117,7 +135,7 @@ export default function CaptureToolPage() {
             />
           </Card>
 
-          <CaptureToolbarPreview fields={fields.filter((f) => f.isEnabled)} />
+          <CaptureToolbarPreview fields={fields.filter((f) => f.isEnabled && f.key !== AUTOMATIC_FIELD)} />
           <CaptureConnections />
         </>
       )}

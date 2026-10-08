@@ -217,7 +217,6 @@ chrome.runtime.onMessage.addListener((message: ContentMessage, sender, sendRespo
             return;
           }
           const session = createSession(platform);
-          presetSource(session, bundle, platform);
           if (!(await writeSession(tabId, session))) {
             await reply({ ok: false, session: null, bundle, error: 'Browser storage is unavailable.' });
             return;
@@ -293,13 +292,6 @@ async function saveLead(tabId: number): Promise<SaveResponse> {
     if (error instanceof GrowDeskError && error.status === 400) void loadBundle().catch(() => undefined);
     return { ok: false, error: errorText(error), field: error instanceof GrowDeskError ? error.field : null };
   }
-}
-
-/** Lead source defaults to the platform when GrowDesk has a source with that name. */
-function presetSource(session: CaptureSession, bundle: ConfigBundle, platform: Platform): void {
-  if (!enabledFields(bundle).some((f) => f.key === 'lead_source')) return;
-  const match = bundle.sources.find((s) => s.name.trim().toLowerCase() === platform.toLowerCase());
-  if (match) session.values.lead_source = match.id;
 }
 
 function errorText(error: unknown): string {

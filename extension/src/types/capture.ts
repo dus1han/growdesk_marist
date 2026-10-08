@@ -46,9 +46,17 @@ export function fieldKind(field: ConfigField): FieldKind {
   }
 }
 
+/**
+ * Fields the toolbar never asks for: the lead source is the site the toolbar is on, which
+ * GrowDesk sets from the request's `source`.
+ */
+const AUTOMATIC_FIELDS = new Set(['lead_source']);
+
 /** The fields the toolbar shows, in the admin's order. */
 export function enabledFields(bundle: ConfigBundle | null | undefined): ConfigField[] {
-  return (bundle?.fields ?? []).filter((f) => f.enabled).sort((a, b) => a.order - b.order);
+  return (bundle?.fields ?? [])
+    .filter((f) => f.enabled && !AUTOMATIC_FIELDS.has(f.key))
+    .sort((a, b) => a.order - b.order);
 }
 
 /** Choices for a list field: the CRM's treatments, stages and sources, or the field's own options. */
@@ -134,7 +142,6 @@ export function buildRequest(session: CaptureSession, bundle: ConfigBundle): Cap
       case 'email': request.email = text; break;
       case 'notes': request.notes = text; break;
       case 'stage': request.stageId = value as number; break;
-      case 'lead_source': request.leadSourceId = value as number; break;
       case 'treatments': request.treatmentIds = value as number[]; break;
       default:
         if (!field.isCustom) break;
@@ -148,5 +155,6 @@ export function buildRequest(session: CaptureSession, bundle: ConfigBundle): Cap
   }
 
   if (Object.keys(custom).length > 0) request.customFields = custom;
+  request.source = session.source === 'Instagram' ? 'instagram' : 'whatsapp';
   return request;
 }

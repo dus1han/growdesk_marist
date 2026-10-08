@@ -186,6 +186,59 @@ public class CaptureTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Lead_source_is_the_site_captured_on_and_a_known_source_is_kept()
+    {
+        var admin = await AdminAsync();
+        await SetCaptureFieldsAsync(admin, Defaults);
+        var (_, tool) = await ConnectAsync(admin);
+        async Task<string?> SourceOfAsync(int customerId) =>
+            (await DataAsync<CustomerDetailDto>(await admin.GetAsync($"/api/customers/{customerId}"))).LeadSource?.Name;
+
+        // Built in: found by key, not by name, and can't be switched off.
+        var sources = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/lead-sources?includeInactive=true"));
+        var whatsApp = sources.Single(s => s.SystemKey == "whatsapp");
+        var instagram = sources.Single(s => s.SystemKey == "instagram");
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.PatchAsJsonAsync($"/api/lead-sources/{instagram.Id}/active", new SetActiveRequest(false))).StatusCode);
+
+        var onInstagram = await DataAsync<CaptureCustomerResultDto>(await tool.PostAsJsonAsync("/api/capture/customers",
+            Lead("Insta Lead", Number()) with { Source = "instagram" }));
+        Assert.Equal(instagram.Name, await SourceOfAsync(onInstagram.CustomerId));
+
+        // Renamed by an admin: still the WhatsApp source.
+        await DataAsync<LookupItemDto>(await admin.PutAsJsonAsync($"/api/lead-sources/{whatsApp.Id}", new SaveLookupItemRequest("WhatsApp chat", null, null)));
+        try
+        {
+            var onWhatsApp = await DataAsync<CaptureCustomerResultDto>(await tool.PostAsJsonAsync("/api/capture/customers",
+                Lead("WA Lead", Number()) with { Source = "whatsapp" }));
+            Assert.Equal("WhatsApp chat", await SourceOfAsync(onWhatsApp.CustomerId));
+        }
+        finally
+        {
+            await DataAsync<LookupItemDto>(await admin.PutAsJsonAsync($"/api/lead-sources/{whatsApp.Id}", new SaveLookupItemRequest(whatsApp.Name, null, null)));
+        }
+
+        // Captured again on another site: keeps where they first came from.
+        var number = Number();
+        var first = await DataAsync<CaptureCustomerResultDto>(await tool.PostAsJsonAsync("/api/capture/customers",
+            Lead("Returning", number) with { Source = "instagram" }));
+        var again = await DataAsync<CaptureCustomerResultDto>(await tool.PostAsJsonAsync("/api/capture/customers",
+            Lead("Returning", number) with { Source = "whatsapp" }));
+        Assert.Equal((first.CustomerId, "updated"), (again.CustomerId, again.Action));
+        Assert.Equal(instagram.Name, await SourceOfAsync(first.CustomerId));
+
+        // An older toolbar sent no site: the source is filled in on the next capture.
+        var legacy = Number();
+        var noSource = await DataAsync<CaptureCustomerResultDto>(await tool.PostAsJsonAsync("/api/capture/customers", Lead("Old Toolbar", legacy)));
+        Assert.Null(await SourceOfAsync(noSource.CustomerId));
+        await DataAsync<CaptureCustomerResultDto>(await tool.PostAsJsonAsync("/api/capture/customers", Lead("Old Toolbar", legacy) with { Source = "whatsapp" }));
+        Assert.Equal(whatsApp.Name, await SourceOfAsync(noSource.CustomerId));
+
+        var unknown = await tool.PostAsJsonAsync("/api/capture/customers", Lead("Nope", Number()) with { Source = "facebook" });
+        Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+    }
+
+    [Fact]
     public async Task Required_fields_follow_the_capture_configuration()
     {
         var admin = await AdminAsync();

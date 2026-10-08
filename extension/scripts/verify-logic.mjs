@@ -67,8 +67,8 @@ const check = (name, fn) => {
   }
 };
 
-check('Fields: only enabled ones, in the admin order', () => {
-  assert.deepEqual(enabledFields(config).map((x) => x.key), ['name', 'whatsapp', 'instagram', 'treatments', 'stage', 'lead_source', 'notes', 'clinic', 'budget']);
+check('Fields: only enabled ones, in the admin order; lead source is never asked (set from the site)', () => {
+  assert.deepEqual(enabledFields(config).map((x) => x.key), ['name', 'whatsapp', 'instagram', 'treatments', 'stage', 'notes', 'clinic', 'budget']);
   assert.equal(fieldKind(config.fields[3]), 'multi');
   assert.equal(fieldKind(config.fields[4]), 'single');
   assert.equal(fieldKind(config.fields[0]), 'highlight');
@@ -92,7 +92,7 @@ check('Not connected or not started: STOP blocked', () => {
   assert.equal(canSave(session({ name: 'x', whatsapp: '1' }), null), false);
   assert.equal(canSave(null, config), false);
 });
-check('Request: built-in keys map to the API names; disabled fields are left out', () => {
+check('Request: built-in keys map to the API names; disabled fields are left out; the site is the source', () => {
   const body = buildRequest(
     session({ name: ' Sarah ', whatsapp: '050 123 4567', treatments: [1, 2], stage: 1, lead_source: 7, notes: 'Asked price', email: 'x@y.z', clinic: 5, budget: '1,500' }),
     config,
@@ -102,10 +102,18 @@ check('Request: built-in keys map to the API names; disabled fields are left out
     whatsApp: '050 123 4567',
     treatmentIds: [1, 2],
     stageId: 1,
-    leadSourceId: 7,
     notes: 'Asked price',
     customFields: { clinic: 5, budget: 1500 },
+    source: 'whatsapp',
   });
+});
+check('Request: a capture on Instagram says so', () => {
+  const s = { ...session({ instagram: '@sarah' }), source: 'Instagram' };
+  assert.equal(buildRequest(s, config).source, 'instagram');
+});
+check('Required lead source no longer blocks STOP (GrowDesk sets it)', () => {
+  const strict = { ...config, fields: config.fields.map((x) => (x.key === 'lead_source' ? { ...x, required: true } : x)) };
+  assert.equal(canSave(session({ name: 'Sarah', whatsapp: '050 123 4567' }), strict), true);
 });
 check('Display: list values show their names', () => {
   assert.equal(displayValue(config.fields[3], [1, 2], config), 'Botox, Filler');

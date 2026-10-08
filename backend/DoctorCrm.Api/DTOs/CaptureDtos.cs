@@ -67,7 +67,12 @@ public record CaptureCustomerRequest(
     int? LeadSourceId,
     IReadOnlyList<int>? TreatmentIds,
     Dictionary<string, JsonElement>? CustomFields,
-    string? Notes);
+    string? Notes,
+    /// <summary>
+    /// The site the toolbar captured on: "whatsapp" or "instagram" (toolbar 1.0.13+). Sets the lead
+    /// source; an older toolbar leaves it out and may send LeadSourceId instead.
+    /// </summary>
+    string? Source = null);
 
 /// <summary>Tells the tool whether the lead was new (spec §35), plus anything it should show the user.</summary>
 public record CaptureCustomerResultDto(int CustomerId, string Action, string CustomerName, IReadOnlyList<string> Warnings);

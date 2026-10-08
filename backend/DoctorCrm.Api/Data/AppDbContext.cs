@@ -89,6 +89,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         });
 
         ConfigureSimpleLookup<LeadSource>(b);
+        b.Entity<LeadSource>(e =>
+        {
+            e.Property(x => x.SystemKey).HasMaxLength(30);
+            e.HasIndex(x => x.SystemKey).IsUnique().HasFilter("system_key IS NOT NULL");
+        });
         ConfigureSimpleLookup<CancellationReason>(b);
         ConfigureSimpleLookup<PaymentMethod>(b);
 

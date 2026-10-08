@@ -250,7 +250,13 @@ function LookupDrawer({
       open={item !== null}
       onOpenChange={(open) => !open && onClose()}
       title={existing ? `Edit ${singular}` : `Add ${singular}`}
-      description={existing?.systemKey ? "A built-in status. You can rename it and change its colour." : undefined}
+      description={
+        existing?.systemKey
+          ? existing.color !== null
+            ? "A built-in status. You can rename it and change its colour."
+            : `A built-in ${singular.toLowerCase()}. You can rename it.`
+          : undefined
+      }
       footer={
         <>
           <Button type="button" variant="secondary" onClick={onClose}>

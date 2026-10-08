@@ -19,6 +19,7 @@ public class DbSeeder(AppDbContext db, IConfiguration config, ILogger<DbSeeder> 
         await SeedTreatmentsAsync(ct);
         await SeedListAsync(db.LeadSources, ["Instagram", "WhatsApp", "Facebook", "Website", "Referral", "Walk-in"], ct);
         await EnsureLeadSourceAsync(BotService.SourceName, ct);
+        foreach (var (key, name) in LeadSourceKeys.All) await EnsureSystemLeadSourceAsync(key, name, ct);
         await SeedListAsync(db.CancellationReasons,
             ["Customer request", "Booked elsewhere", "No longer interested", "Doctor unavailable", "Other"], ct);
         await SeedListAsync(db.PaymentMethods, ["Cash", "Card", "Bank Transfer", "Other"], ct);
@@ -108,6 +109,28 @@ public class DbSeeder(AppDbContext db, IConfiguration config, ILogger<DbSeeder> 
         if (await db.LeadSources.AnyAsync(s => s.Name == name, ct)) return;
         var order = await db.LeadSources.MaxAsync(s => (int?)s.DisplayOrder, ct) ?? 0;
         db.LeadSources.Add(new LeadSource { Name = name, IsActive = true, DisplayOrder = order + 1 });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// The capture toolbar's lead sources, found by key: an existing source with the same name is
+    /// adopted (an admin may have renamed it since), otherwise one is added.
+    /// </summary>
+    private async Task EnsureSystemLeadSourceAsync(string key, string name, CancellationToken ct)
+    {
+        if (await db.LeadSources.AnyAsync(s => s.SystemKey == key, ct)) return;
+        var existing = await db.LeadSources.Where(s => s.SystemKey == null && s.Name.ToLower() == name.ToLower())
+            .OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
+        if (existing is not null)
+        {
+            existing.SystemKey = key;
+            existing.IsActive = true;
+        }
+        else
+        {
+            var order = await db.LeadSources.MaxAsync(s => (int?)s.DisplayOrder, ct) ?? 0;
+            db.LeadSources.Add(new LeadSource { Name = name, SystemKey = key, IsActive = true, DisplayOrder = order + 1 });
+        }
         await db.SaveChangesAsync(ct);
     }
 

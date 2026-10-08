@@ -123,7 +123,9 @@ public partial class CaptureService(AppDbContext db, AuditService audit, Contact
 
         Set(nameof(Customer.Name), customer.Name, lead.Name, v => customer.Name = v!);
         Set(nameof(Customer.Email), customer.Email, lead.Email, v => customer.Email = v);
-        Set(nameof(Customer.LeadSourceId), customer.LeadSourceId, lead.LeadSourceId, v => customer.LeadSourceId = v);
+        // Lead source records where the customer first came from: kept once known, filled in if missing.
+        if (customer.LeadSourceId is null)
+            Set(nameof(Customer.LeadSourceId), customer.LeadSourceId, lead.LeadSourceId, v => customer.LeadSourceId = v);
         Set(nameof(Customer.SecondaryPhone), customer.SecondaryPhone, lead.SecondaryPhone, v => customer.SecondaryPhone = v);
 
         // Matched by WhatsApp: a new Instagram name is added unless it belongs to someone else.
@@ -220,6 +222,15 @@ public partial class CaptureService(AppDbContext db, AuditService audit, Contact
 
     // ---- Validation ---------------------------------------------------------------------------
 
+    private async Task<int> SiteSourceIdAsync(string site, CancellationToken ct)
+    {
+        var key = site.Trim().ToLowerInvariant();
+        if (key is not (LeadSourceKeys.WhatsApp or LeadSourceKeys.Instagram))
+            throw new BusinessRuleException("The capture tool sent an unknown site. Update GrowDesk Capture.", field: "source");
+        return await db.LeadSources.Where(s => s.SystemKey == key).Select(s => (int?)s.Id).SingleOrDefaultAsync(ct)
+            ?? throw new InvalidOperationException($"The built-in lead source '{key}' is missing.");
+    }
+
     private sealed record ValidLead(
         string? Name,
         string? WhatsApp,
@@ -254,7 +265,9 @@ public partial class CaptureService(AppDbContext db, AuditService audit, Contact
         var email = On("email") ? Clean(r.Email)?.ToLowerInvariant() : null;
         var notes = On("notes") ? Clean(r.Notes) : null;
         var stageId = On("stage") ? r.StageId : null;
-        var sourceId = On("lead_source") ? r.LeadSourceId : null;
+        // The toolbar says which site it captured on, and that is the lead source. Older toolbars
+        // don't, and may send a chosen source instead (when the admin shows that field).
+        var sourceId = r.Source is { } site ? await SiteSourceIdAsync(site, ct) : On("lead_source") ? r.LeadSourceId : null;
         var treatmentIds = On("treatments") ? (r.TreatmentIds ?? []).Distinct().ToList() : [];
         var customInput = r.CustomFields ?? [];
 
