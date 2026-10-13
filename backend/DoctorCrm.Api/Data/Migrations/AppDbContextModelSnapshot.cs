@@ -320,6 +320,10 @@ namespace DoctorCrm.Api.Data.Migrations
                         .HasColumnType("time without time zone")
                         .HasColumnName("end_time");
 
+                    b.Property<int?>("NextBookingId")
+                        .HasColumnType("integer")
+                        .HasColumnName("next_booking_id");
+
                     b.Property<DateOnly?>("NextTreatmentDate")
                         .HasColumnType("date")
                         .HasColumnName("next_treatment_date");
@@ -375,6 +379,9 @@ namespace DoctorCrm.Api.Data.Migrations
 
                     b.HasIndex("CustomerId")
                         .HasDatabaseName("ix_bookings_customer_id");
+
+                    b.HasIndex("NextBookingId")
+                        .HasDatabaseName("ix_bookings_next_booking_id");
 
                     b.HasIndex("NextTreatmentId")
                         .HasDatabaseName("ix_bookings_next_treatment_id");
@@ -1444,6 +1451,12 @@ namespace DoctorCrm.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_bookings_users_doctor_id");
 
+                    b.HasOne("DoctorCrm.Api.Entities.Booking", "NextBooking")
+                        .WithMany()
+                        .HasForeignKey("NextBookingId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_bookings_bookings_next_booking_id");
+
                     b.HasOne("DoctorCrm.Api.Entities.Treatment", "NextTreatment")
                         .WithMany()
                         .HasForeignKey("NextTreatmentId")
@@ -1461,6 +1474,8 @@ namespace DoctorCrm.Api.Data.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Doctor");
+
+                    b.Navigation("NextBooking");
 
                     b.Navigation("NextTreatment");
 

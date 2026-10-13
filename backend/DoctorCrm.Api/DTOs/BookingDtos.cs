@@ -76,7 +76,14 @@ public record BookingDetailDto(
     DateTime? NoShowAt,
     DateTime CreatedAt,
     /// <summary>"WhatsApp BOT" when the bot made the booking; null when made in GrowDesk.</summary>
-    string? Source);
+    string? Source,
+    /// <summary>The consultation booked for the next treatment (from this one).</summary>
+    BookingLinkDto? NextBooking = null,
+    /// <summary>
+    /// The next treatment is taken care of: booked from here, or the customer has another
+    /// consultation booked. False: offer to book it.
+    /// </summary>
+    bool NextTreatmentBooked = false);
 
 public record CreateBookingRequest(
     int CustomerId,
@@ -85,7 +92,9 @@ public record CreateBookingRequest(
     TimeOnly StartTime,
     TimeOnly EndTime,
     IReadOnlyList<int> TreatmentIds,
-    string? Notes);
+    string? Notes,
+    /// <summary>Booking a completed consultation's next treatment: that consultation's ID, linked to this booking.</summary>
+    int? NextTreatmentOf = null);
 
 /// <summary>Edits a booked consultation's treatments, doctor and notes. Time changes go through reschedule.</summary>
 public record UpdateBookingRequest(int? DoctorId, IReadOnlyList<int> TreatmentIds, string? Notes);
@@ -102,7 +111,9 @@ public record CompleteBookingRequest(
     int? NextTreatmentId,
     string? DoctorNotes,
     /// <summary>Required when the booking has no treatment yet (the WhatsApp BOT couldn't tell): what was done.</summary>
-    IReadOnlyList<int>? TreatmentIds = null);
+    IReadOnlyList<int>? TreatmentIds = null,
+    /// <summary>With a next treatment date: its start time. The next treatment is then booked straight away.</summary>
+    TimeOnly? NextTreatmentStartTime = null);
 
 public record RescheduleBookingRequest(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, int? DoctorId);
 

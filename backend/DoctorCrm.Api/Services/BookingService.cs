@@ -85,6 +85,7 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
             .Include(x => x.NextTreatment)
             .Include(x => x.CancellationReason)
             .Include(x => x.OriginalBooking)
+            .Include(x => x.NextBooking)
             .Include(x => x.Payments).ThenInclude(p => p.PaymentMethod)
             .Include(x => x.Payments).ThenInclude(p => p.CreatedBy)
             .AsSplitQuery()
@@ -115,7 +116,9 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
                 p.Id, p.Amount, p.Status.ToString(),
                 p.PaymentMethod is null ? null : new NamedRef(p.PaymentMethod.Id, p.PaymentMethod.Name),
                 p.PaymentDate, p.CreatedBy?.FullName, p.CreatedAt)).ToList(),
-            b.CompletedAt, b.CancelledAt, b.RescheduledAt, b.NoShowAt, b.CreatedAt, b.Source);
+            b.CompletedAt, b.CancelledAt, b.RescheduledAt, b.NoShowAt, b.CreatedAt, b.Source,
+            b.NextBooking is null ? null : new BookingLinkDto(b.NextBooking.Id, b.NextBooking.BookingDate, b.NextBooking.StartTime, b.NextBooking.Status.ToString()),
+            b.NextBooking is not null || (b.NextTreatmentDate is not null && await HasUpcomingBookingAsync(b.CustomerId, b.Id, ct)));
     }
 
     /// <param name="source">Set when made outside GrowDesk, e.g. by the WhatsApp BOT.</param>
@@ -148,6 +151,12 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
         await db.SaveChangesAsync(ct);
         audit.Record(userId, "Booking Created", nameof(Booking), booking.Id,
             new { customerId = customer.Id, date = r.Date, start = r.StartTime, source });
+
+        // Booked as a completed consultation's next treatment: link them, so it isn't offered again.
+        if (r.NextTreatmentOf is { } fromId
+            && await db.Bookings.SingleOrDefaultAsync(b => b.Id == fromId && b.CustomerId == customer.Id && b.Status == BookingStatus.Completed, ct) is { } from)
+            from.NextBookingId = booking.Id;
+
         await db.SaveChangesAsync(ct);
         return await GetAsync(booking.Id, ct);
     }
@@ -213,6 +222,10 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
             throw new BusinessRuleException("Choose a valid treatment.", field: "nextTreatmentId");
         if (r.NextTreatmentDate is { } nd && nd < booking.BookingDate)
             throw new BusinessRuleException("The next treatment can't be before this consultation.", field: "nextTreatmentDate");
+        if (r.NextTreatmentDate is { } nextDay && nextDay < await clock.TodayAsync(ct))
+            throw new BusinessRuleException("The next treatment can't be in the past.", field: "nextTreatmentDate");
+        if (r.NextTreatmentDate is not null && r.NextTreatmentStartTime is null)
+            throw new BusinessRuleException("Choose a time for the next treatment.", field: "nextTreatmentStartTime");
 
         var now = DateTime.UtcNow;
         booking.Status = BookingStatus.Completed;
@@ -242,8 +255,36 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
             new { charge = r.ConsultationCharge, paid = r.PaidAmount, balance = booking.Balance, nextTreatment = r.NextTreatmentDate });
         if (r.PaidAmount > 0)
             audit.Record(userId, "Payment Recorded", nameof(Booking), id, new { amount = r.PaidAmount, balance = booking.Balance });
+        await BookNextTreatmentAsync(booking, r, userId, ct);
         await db.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
+    }
+
+    /// <summary>
+    /// A next treatment entered on completion is booked straight away: same doctor, same length
+    /// as this consultation. A clash or blocked time stops the whole completion, so nothing is half saved.
+    /// </summary>
+    private async Task BookNextTreatmentAsync(Booking booking, CompleteBookingRequest r, int? userId, CancellationToken ct)
+    {
+        if (r.NextTreatmentDate is not { } date || r.NextTreatmentId is not { } treatment || r.NextTreatmentStartTime is not { } start) return;
+
+        var length = booking.EndTime - booking.StartTime;
+        if (length < TimeSpan.FromMinutes(15)) length = TimeSpan.FromMinutes(30);
+        var end = start.Add(length, out var wrapped);
+        if (wrapped > 0)
+            throw new BusinessRuleException("The next treatment would run past midnight. Choose an earlier time.", field: "nextTreatmentStartTime");
+
+        BookingDetailDto next;
+        try
+        {
+            next = await CreateAsync(new CreateBookingRequest(booking.CustomerId, booking.DoctorId, date, start, end, [treatment],
+                $"Next treatment after the consultation on {booking.BookingDate:dd MMM yyyy}."), userId, ct);
+        }
+        catch (BusinessRuleException ex) when (ex.Field is "startTime" or "treatmentIds" or "doctorId")
+        {
+            throw new BusinessRuleException($"Next treatment: {ex.Message}", ex.StatusCode, "nextTreatmentStartTime") { Details = ex.Details };
+        }
+        booking.NextBookingId = next.Id;
     }
 
     /// <summary>
@@ -313,6 +354,13 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
         await RestartFollowUpsAsync(booking, ct);
         await db.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
+    }
+
+    private async Task<bool> HasUpcomingBookingAsync(int customerId, int exceptId, CancellationToken ct)
+    {
+        var today = await clock.TodayAsync(ct);
+        return await db.Bookings.AnyAsync(x => x.CustomerId == customerId && x.Id != exceptId
+                                               && x.Status == BookingStatus.Booked && x.BookingDate >= today, ct);
     }
 
     /// <summary>

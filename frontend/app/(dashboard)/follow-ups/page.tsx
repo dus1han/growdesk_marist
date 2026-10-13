@@ -1,11 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlarmClock, BellRing, CalendarPlus, CircleAlert, MessageCircle, PartyPopper, PhoneCall, RotateCcw, Sparkles } from "lucide-react";
+import { AlarmClock, BellRing, CalendarClock, CalendarPlus, CircleAlert, MessageCircle, PartyPopper, PhoneCall, RotateCcw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { BookingFormDrawer } from "@/components/bookings/booking-form-drawer";
+import { BookingFormDrawer, type BookingPrefill } from "@/components/bookings/booking-form-drawer";
 import { StageBadge } from "@/components/customers/stage-badge";
 import { whatsAppUrl } from "@/components/customers/whatsapp-link";
 import { LogFollowUpDrawer, type FollowUpTarget } from "@/components/follow-ups/log-follow-up-drawer";
@@ -49,7 +49,7 @@ export default function FollowUpsPage() {
   }, []);
   const { data, isPending, isError, isFetching, refetch } = useFollowUpQueue(scope);
   const [logging, setLogging] = useState<FollowUpTarget | null>(null);
-  const [booking, setBooking] = useState<FollowUpItem | null>(null);
+  const [booking, setBooking] = useState<BookingPrefill | null>(null);
 
   const changeScope = (next: "mine" | "all") => {
     setScope(next);
@@ -61,6 +61,7 @@ export default function FollowUpsPage() {
   };
 
   const items = data?.items ?? [];
+  const nextTreatments = data?.nextTreatments ?? [];
   const today = data?.today ?? "";
   const groups: Group[] = [
     {
@@ -142,7 +143,7 @@ export default function FollowUpsPage() {
             }
           />
         </Card>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && nextTreatments.length === 0 ? (
         <Card>
           <EmptyState
             icon={PartyPopper}
@@ -176,7 +177,7 @@ export default function FollowUpsPage() {
                           today={today}
                           maxAttempts={data.maxAttempts}
                           onLog={canLog ? () => setLogging({ id: item.id, name: item.name, whatsApp: item.whatsApp, attempts: item.attempts }) : undefined}
-                          onBook={canBook ? () => setBooking(item) : undefined}
+                          onBook={canBook ? () => setBooking({ customer: { id: item.id, name: item.name } }) : undefined}
                         />
                       ))}
                     </AnimatePresence>
@@ -184,19 +185,88 @@ export default function FollowUpsPage() {
                 </Card>
               </motion.section>
             ))}
+
+          {nextTreatments.length > 0 && (
+            <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+              <Card className="overflow-hidden">
+                <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+                  <CalendarClock className="size-5 text-emerald-600" />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-display text-[15px] font-semibold">
+                      Next treatments to book <span className="text-muted">· {nextTreatments.length}</span>
+                    </h2>
+                    <p className="text-xs text-muted">Set when a consultation was completed, but not booked yet. Agree a time and book it.</p>
+                  </div>
+                </div>
+                <ul className="divide-y divide-line">
+                  {nextTreatments.map((n) => (
+                    <li key={n.bookingId} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-emerald-50/40">
+                      <Link href={`/customers/${n.customerId}`} className="min-w-0 flex-1 basis-56">
+                        <p className="truncate font-semibold hover:text-brand-strong">{n.customerName}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted">
+                          {n.treatment?.name ?? "Treatment"}
+                          {n.doctor && ` · ${n.doctor.name}`}
+                        </p>
+                      </Link>
+                      <p className={cn("w-40 text-xs", n.date < today ? "font-semibold text-danger" : "text-muted")}>
+                        {n.date < today ? `Was due ${formatDate(n.date)}` : `Due ${formatDate(n.date)}`}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        {n.whatsApp && (
+                          <a
+                            href={whatsAppUrl(n.whatsApp)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`WhatsApp ${n.customerName}`}
+                            title={n.whatsApp}
+                            className="flex size-9 items-center justify-center rounded-xl border border-line text-emerald-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50"
+                          >
+                            <MessageCircle className="size-4" />
+                          </a>
+                        )}
+                        {canBook && (
+                          <Button
+                            size="sm"
+                            className="h-9"
+                            onClick={() =>
+                              setBooking({
+                                customer: { id: n.customerId, name: n.customerName, treatmentIds: n.treatment ? [n.treatment.id] : [] },
+                                date: n.date >= today ? n.date : undefined,
+                                doctorId: n.doctor?.id ?? null,
+                                nextTreatmentOf: n.bookingId,
+                              })
+                            }
+                          >
+                            <CalendarPlus className="size-4" /> Book
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </motion.section>
+          )}
         </div>
       )}
 
       <LogFollowUpDrawer
         target={logging}
         onClose={() => setLogging(null)}
-        onBook={canBook ? (id) => setBooking(items.find((i) => i.id === id) ?? null) : undefined}
+        onBook={
+          canBook
+            ? (id) => {
+                const item = items.find((i) => i.id === id);
+                if (item) setBooking({ customer: { id: item.id, name: item.name } });
+              }
+            : undefined
+        }
       />
       {canBook && (
         <BookingFormDrawer
           open={booking !== null}
           onClose={() => setBooking(null)}
-          prefill={booking ? { customer: { id: booking.id, name: booking.name } } : undefined}
+          prefill={booking ?? undefined}
           onSaved={() => {
             setBooking(null);
             void queryClient.invalidateQueries({ queryKey: followUpKeys.all });

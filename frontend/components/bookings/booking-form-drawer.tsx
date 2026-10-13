@@ -53,6 +53,9 @@ export interface BookingPrefill {
   date?: string;
   startTime?: string;
   endTime?: string;
+  doctorId?: number | null;
+  /** Booking a completed consultation's next treatment: that consultation's ID. */
+  nextTreatmentOf?: number;
 }
 
 interface Props {
@@ -120,7 +123,7 @@ function BookingForm({
       date: booking?.date ?? prefill?.date ?? "",
       startTime: booking ? hhmm(booking.startTime) : start,
       endTime: booking ? hhmm(booking.endTime) : (prefill?.endTime ?? fromMinutes(toMinutes(start) + 30)),
-      doctorId: booking?.doctor?.id ?? null,
+      doctorId: booking?.doctor?.id ?? prefill?.doctorId ?? null,
       treatmentIds: booking?.treatments.map((t) => t.id) ?? prefill?.customer?.treatmentIds ?? [],
       notes: booking?.notes ?? "",
     },
@@ -144,6 +147,7 @@ function BookingForm({
             endTime: v.endTime,
             treatmentIds: v.treatmentIds,
             notes: v.notes || null,
+            nextTreatmentOf: prefill?.nextTreatmentOf ?? null,
           });
       toast.success(booking ? "Booking saved" : `Consultation booked for ${saved.customer.name}`);
       onSaved?.(saved);

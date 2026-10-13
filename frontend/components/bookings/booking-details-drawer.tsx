@@ -246,10 +246,7 @@ function Details({
             </div>
           )}
           {booking.nextTreatment && booking.nextTreatmentDate && (
-            <p className="text-sm">
-              Next treatment: <span className="font-semibold">{booking.nextTreatment.name}</span> on{" "}
-              <span className="font-semibold">{formatDate(booking.nextTreatmentDate)}</span>
-            </p>
+            <NextTreatment booking={booking} onOpen={onOpen} />
           )}
           {booking.doctorNotes && (
             <NoteCard label="Doctor notes" icon={Stethoscope} className="border-emerald-100 bg-surface">
@@ -432,6 +429,58 @@ function WaiveBalance({ bookingId, balance, currency }: { bookingId: number; bal
   );
 }
 
+/**
+ * The next treatment set on completion: booked (open it), or not booked yet (book it now, which
+ * links the two). Older completions saved a date without booking it.
+ */
+function NextTreatment({ booking, onOpen }: { booking: BookingDetail; onOpen?: (id: number) => void }) {
+  const { data: session } = useSession();
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const canBook = can(session?.user, Permission.BookingsManage);
+  const treatment = booking.nextTreatment!;
+  const next = booking.nextBooking;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-100 bg-surface px-3 py-2.5 text-sm">
+      <span>
+        Next treatment: <span className="font-semibold">{treatment.name}</span> on{" "}
+        <span className="font-semibold">{formatDate(next?.date ?? booking.nextTreatmentDate)}</span>
+        {next && <span className="font-semibold">, {formatTime(next.startTime)}</span>}
+      </span>
+      {next ? (
+        <button
+          type="button"
+          onClick={() => onOpen?.(next.id)}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-900"
+        >
+          <CalendarClock className="size-3.5" /> {next.status === "Booked" ? "Booked" : next.status} <ArrowRight className="size-3.5" />
+        </button>
+      ) : booking.nextTreatmentBooked ? (
+        <span className="text-xs font-semibold text-emerald-700">Another consultation is booked</span>
+      ) : canBook ? (
+        <Button size="sm" onClick={() => setBookingOpen(true)}>
+          <CalendarClock className="size-4" /> Book it
+        </Button>
+      ) : (
+        <span className="text-xs font-semibold text-amber-700">Not booked yet</span>
+      )}
+      {canBook && !next && (
+        <BookingFormDrawer
+          open={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+          prefill={{
+            customer: { id: booking.customer.id, name: booking.customer.name, treatmentIds: [treatment.id] },
+            date: booking.nextTreatmentDate ?? undefined,
+            doctorId: booking.doctor?.id ?? null,
+            nextTreatmentOf: booking.id,
+          }}
+          onSaved={(saved) => onOpen?.(saved.id)}
+        />
+      )}
+    </div>
+  );
+}
+
 function ChainLink({ label, link, onOpen }: { label: string; link: BookingDetail["rescheduledFrom"] & object; onOpen?: (id: number) => void }) {
   return (
     <button
@@ -496,6 +545,7 @@ const completeSchema = z
     paymentMethodId: z.number().nullable(),
     nextTreatmentDate: z.string(),
     nextTreatmentId: z.number().nullable(),
+    nextTreatmentStartTime: z.string(),
     doctorNotes: z.string().max(4000),
     /** Only asked for when the booking has no treatment yet. */
     treatmentIds: z.array(z.number()),
@@ -512,6 +562,8 @@ const completeSchema = z
       ctx.addIssue({ code: "custom", path: ["nextTreatmentId"], message: "Choose the next treatment, or clear the date." });
     if (!v.nextTreatmentDate && v.nextTreatmentId !== null)
       ctx.addIssue({ code: "custom", path: ["nextTreatmentDate"], message: "Choose the next treatment date, or clear the treatment." });
+    if (v.nextTreatmentDate && !v.nextTreatmentStartTime)
+      ctx.addIssue({ code: "custom", path: ["nextTreatmentStartTime"], message: "Choose a time: the next treatment is booked for it." });
   });
 type CompleteValues = z.infer<typeof completeSchema>;
 
@@ -535,6 +587,7 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
       paymentMethodId: null,
       nextTreatmentDate: "",
       nextTreatmentId: null,
+      nextTreatmentStartTime: "",
       doctorNotes: "",
       treatmentIds: [],
       needsTreatment: booking.treatments.length === 0,
@@ -554,6 +607,7 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
         paymentMethodId: v.paidAmount > 0 ? v.paymentMethodId : null,
         nextTreatmentDate: v.nextTreatmentDate || null,
         nextTreatmentId: v.nextTreatmentId,
+        nextTreatmentStartTime: v.nextTreatmentDate ? v.nextTreatmentStartTime : null,
         doctorNotes: v.doctorNotes || null,
         treatmentIds: v.needsTreatment ? v.treatmentIds : null,
       });
@@ -665,12 +719,15 @@ function CompleteForm({ booking, onDone }: { booking: BookingDetail; onDone: () 
 
       <fieldset className="rounded-xl border border-line p-4">
         <legend className="px-1 text-[13px] font-medium">Next treatment</legend>
-        <p className="-mt-1 mb-3 text-xs text-muted">Optional. Fill both, or leave both empty.</p>
+        <p className="-mt-1 mb-3 text-xs text-muted">Optional. With a date and time, the next treatment is booked straight away.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Date" error={errors.nextTreatmentDate?.message}>
-            {(p) => <Input {...p} type="date" min={booking.date} {...register("nextTreatmentDate")} />}
+            {(p) => <Input {...p} type="date" min={today()} {...register("nextTreatmentDate")} />}
           </Field>
-          <Field label="Treatment" error={errors.nextTreatmentId?.message}>
+          <Field label="Time" error={errors.nextTreatmentStartTime?.message}>
+            {(p) => <Input {...p} type="time" step={900} {...register("nextTreatmentStartTime")} />}
+          </Field>
+          <Field label="Treatment" error={errors.nextTreatmentId?.message} className="sm:col-span-2">
             {(p) => (
               <Select {...p} {...register("nextTreatmentId", { setValueAs: idOrNull })}>
                 <option value="">None</option>

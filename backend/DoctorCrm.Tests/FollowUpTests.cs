@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using DoctorCrm.Api.Data;
 using DoctorCrm.Api.DTOs;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DoctorCrm.Tests;
 
@@ -116,6 +119,41 @@ public class FollowUpTests(ApiFactory factory) : IClassFixture<ApiFactory>
         {
             await DataAsync<FollowUpSettingsDto>(await admin.PutAsJsonAsync("/api/follow-ups/settings", original));
         }
+    }
+
+    [Fact]
+    public async Task Next_treatments_saved_without_a_booking_are_listed_until_booked()
+    {
+        var admin = await AdminAsync();
+        var customer = await NewCustomerAsync(admin);
+        var treatments = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/treatments"));
+        var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
+        var visit = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings",
+            new CreateBookingRequest(customer.Id, null, Today, new TimeOnly(8, 0), new TimeOnly(8, 30), [treatments[0].Id], null)));
+        await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{visit.Id}/complete",
+            new CompleteBookingRequest(100, 100, methods[0].Id, null, null, null)));
+
+        // As saved before next treatments were booked automatically: a date and a treatment, no booking.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var row = await db.Bookings.SingleAsync(b => b.Id == visit.Id);
+            row.NextTreatmentDate = Today.AddDays(3);
+            row.NextTreatmentId = treatments[1].Id;
+            await db.SaveChangesAsync();
+        }
+
+        var queue = await DataAsync<FollowUpQueueDto>(await admin.GetAsync("/api/follow-ups"));
+        var item = Assert.Single(queue.NextTreatments, n => n.BookingId == visit.Id);
+        Assert.Equal((customer.Id, Today.AddDays(3), treatments[1].Id), (item.CustomerId, item.Date, item.Treatment!.Id));
+        Assert.False((await DataAsync<BookingDetailDto>(await admin.GetAsync($"/api/bookings/{visit.Id}"))).NextTreatmentBooked);
+
+        // Booked from the list: linked, and no longer offered.
+        var booked = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings",
+            new CreateBookingRequest(customer.Id, null, Today.AddDays(3), new TimeOnly(11, 0), new TimeOnly(11, 30), [treatments[1].Id], null, visit.Id)));
+        var linked = await DataAsync<BookingDetailDto>(await admin.GetAsync($"/api/bookings/{visit.Id}"));
+        Assert.Equal(booked.Id, linked.NextBooking!.Id);
+        Assert.DoesNotContain((await DataAsync<FollowUpQueueDto>(await admin.GetAsync("/api/follow-ups"))).NextTreatments, n => n.BookingId == visit.Id);
     }
 
     [Fact]

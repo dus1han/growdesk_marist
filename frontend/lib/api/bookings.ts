@@ -96,6 +96,8 @@ export interface CreateBooking {
   endTime: string;
   treatmentIds: number[];
   notes: string | null;
+  /** Booking a completed consultation's next treatment: that consultation's ID (links them). */
+  nextTreatmentOf?: number | null;
 }
 
 export interface CompleteBooking {
@@ -108,6 +110,8 @@ export interface CompleteBooking {
   doctorNotes: string | null;
   /** Only when the booking has no treatment yet. */
   treatmentIds?: number[] | null;
+  /** "HH:mm": with a next treatment date, it is booked straight away at this time. */
+  nextTreatmentStartTime?: string | null;
 }
 
 /** Every booking action refreshes the calendar, lists and the affected customer. */

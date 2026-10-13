@@ -116,8 +116,9 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         var booking = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, day, T(12), T(12, 30), [treatments[0].Id])));
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
 
+        // The next treatment gets booked: on a day no other test books on.
         var request = new CompleteBookingRequest(250, 250, methods[0].Id,
-            withDate ? day.AddDays(14) : null, withTreatment ? treatments[1].Id : null, null);
+            withDate ? NewDay() : null, withTreatment ? treatments[1].Id : null, null, NextTreatmentStartTime: withDate ? T(10) : null);
         var response = await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete", request);
 
         if (valid)
@@ -129,6 +130,44 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
         {
             await FailAsync(response, HttpStatusCode.BadRequest);
         }
+    }
+
+    [Fact]
+    public async Task The_next_treatment_is_booked_when_completing()
+    {
+        var admin = await AdminAsync();
+        var (customer, treatments) = await NewCustomerAsync(admin);
+        var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
+        var day = NewDay();
+        var booking = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(customer.Id, day, T(12), T(12, 45), [treatments[0].Id])));
+        var nextDay = NewDay(); // a day no other test books on
+
+        // A date needs a time.
+        var noTime = await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
+            new CompleteBookingRequest(300, 300, methods[0].Id, nextDay, treatments[1].Id, null));
+        Assert.Contains("nextTreatmentStartTime", await noTime.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, noTime.StatusCode);
+
+        // A clash refuses the whole completion: nothing is half saved.
+        var other = (await NewCustomerAsync(admin)).Customer;
+        await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync("/api/bookings", Book(other.Id, nextDay, T(10), T(10, 30), [treatments[0].Id])));
+        var clash = await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
+            new CompleteBookingRequest(300, 300, methods[0].Id, nextDay, treatments[1].Id, null, NextTreatmentStartTime: T(10, 15)));
+        Assert.Equal(HttpStatusCode.Conflict, clash.StatusCode);
+        Assert.Contains("Next treatment:", await clash.Content.ReadAsStringAsync());
+        Assert.Equal("Booked", (await DataAsync<BookingDetailDto>(await admin.GetAsync($"/api/bookings/{booking.Id}"))).Status);
+
+        // Booked: same length as the consultation, the chosen treatment, linked, and on the calendar.
+        var done = await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{booking.Id}/complete",
+            new CompleteBookingRequest(300, 300, methods[0].Id, nextDay, treatments[1].Id, null, NextTreatmentStartTime: T(14))));
+        Assert.True(done.NextTreatmentBooked);
+        var link = done.NextBooking!;
+        Assert.Equal((nextDay, T(14), "Booked"), (link.Date, link.StartTime, link.Status));
+        var next = await DataAsync<BookingDetailDto>(await admin.GetAsync($"/api/bookings/{link.Id}"));
+        Assert.Equal((T(14, 45), treatments[1].Id), (next.EndTime, Assert.Single(next.Treatments).Id));
+        var onThatDay = await DataAsync<PagedResult<BookingListItemDto>>(await admin.GetAsync(
+            $"/api/bookings?from={nextDay:yyyy-MM-dd}&to={nextDay:yyyy-MM-dd}&customerId={customer.Id}"));
+        Assert.Equal([link.Id], onThatDay.Items.Select(b => b.Id));
     }
 
     [Fact]
@@ -337,10 +376,9 @@ public class BookingIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
 
         var methods = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/payment-methods"));
         await DataAsync<BookingDetailDto>(await admin.PostAsJsonAsync($"/api/bookings/{moved.Id}/complete",
-            new CompleteBookingRequest(200, 200, methods[0].Id, day.AddDays(20), treatments[0].Id, null)));
+            new CompleteBookingRequest(200, 200, methods[0].Id, null, null, null)));
         c = await CustomerAsync(admin, customer.Id);
         Assert.Equal("consulted", c.Consultation.State);
-        Assert.Equal(day.AddDays(20), c.Consultation.NextTreatmentDate);
         Assert.Equal("customer", c.Stage.SystemKey);
 
         // The list filters on the same rules.

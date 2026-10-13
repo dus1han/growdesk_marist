@@ -25,6 +25,19 @@ export interface FollowUpQueue {
   today: string;
   maxAttempts: number;
   items: FollowUpItem[];
+  /** Next treatments set on completion but never booked. */
+  nextTreatments: NextTreatmentItem[];
+}
+
+/** bookingId: the completed consultation; book with nextTreatmentOf = bookingId. */
+export interface NextTreatmentItem {
+  bookingId: number;
+  customerId: number;
+  customerName: string;
+  whatsApp: string | null;
+  date: string;
+  treatment: NamedRef | null;
+  doctor: NamedRef | null;
 }
 
 export interface NewEnquiry {

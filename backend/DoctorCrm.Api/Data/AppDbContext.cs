@@ -182,6 +182,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.Doctor).WithMany().HasForeignKey(x => x.DoctorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.NextTreatment).WithMany().HasForeignKey(x => x.NextTreatmentId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.OriginalBooking).WithMany().HasForeignKey(x => x.OriginalBookingId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.NextBooking).WithMany().HasForeignKey(x => x.NextBookingId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.CancellationReason).WithMany().HasForeignKey(x => x.CancellationReasonId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.SetNull);
         });

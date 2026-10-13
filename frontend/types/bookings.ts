@@ -72,6 +72,10 @@ export interface BookingDetail {
   createdAt: string;
   /** "WhatsApp BOT" when the bot made the booking; null when made in GrowDesk. */
   source: string | null;
+  /** The consultation booked for the next treatment, from this one. */
+  nextBooking: BookingLink | null;
+  /** The next treatment is booked (from here, or the customer has another booking). False: offer to book it. */
+  nextTreatmentBooked: boolean;
 }
 
 export interface BookingQuery {

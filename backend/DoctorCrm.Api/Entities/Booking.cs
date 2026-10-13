@@ -56,6 +56,10 @@ public class Booking : AuditableEntity, ISoftDeletable
     public int? NextTreatmentId { get; set; }
     public Treatment? NextTreatment { get; set; }
 
+    /// <summary>The consultation booked for the next treatment, when it was booked from this one.</summary>
+    public int? NextBookingId { get; set; }
+    public Booking? NextBooking { get; set; }
+
     /// <summary>On a booking created by rescheduling: the booking it replaced.</summary>
     public int? OriginalBookingId { get; set; }
     public Booking? OriginalBooking { get; set; }

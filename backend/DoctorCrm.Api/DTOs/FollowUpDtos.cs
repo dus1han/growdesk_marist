@@ -22,7 +22,20 @@ public record FollowUpItemDto(
     /// <summary>A new enquiry nobody has contacted yet.</summary>
     bool IsNew);
 
-public record FollowUpQueueDto(DateOnly Today, int MaxAttempts, IReadOnlyList<FollowUpItemDto> Items);
+public record FollowUpQueueDto(DateOnly Today, int MaxAttempts, IReadOnlyList<FollowUpItemDto> Items, IReadOnlyList<NextTreatmentItemDto> NextTreatments);
+
+/// <summary>
+/// A completed consultation whose next treatment date was set but never booked (and the customer
+/// has nothing else booked). BookingId is the completed consultation; book with NextTreatmentOf = BookingId.
+/// </summary>
+public record NextTreatmentItemDto(
+    int BookingId,
+    int CustomerId,
+    string CustomerName,
+    string? WhatsApp,
+    DateOnly Date,
+    NamedRef? Treatment,
+    NamedRef? Doctor);
 
 public record NewEnquiryDto(int Id, string Name, DateTime CreatedAt, string? LeadSource, string? Treatment);
 

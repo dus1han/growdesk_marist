@@ -70,7 +70,34 @@ public class FollowUpService(AppDbContext db, ClinicClock clock, AuditService au
             r.Id, r.Name, r.WhatsAppNumber is null ? null : ContactNormalizer.FormatPhone(r.WhatsAppNumber), r.InstagramName,
             r.Stage, r.Treatments, r.LeadSource, r.AssignedUser, r.Due, r.FollowUpAttempts, r.LastContactDate, r.CreatedAt,
             IsNew(r.FollowUpAttempts, r.LastFollowUpAt, r.CreatedAt, newSince))).ToList();
-        return new FollowUpQueueDto(today, settings.MaxAttempts, items);
+        return new FollowUpQueueDto(today, settings.MaxAttempts, items, await NextTreatmentsAsync(scope, userId, today, ct));
+    }
+
+    /// <summary>
+    /// Next treatments set when completing a consultation but never booked: from a month ago on,
+    /// while the customer has nothing else booked.
+    /// </summary>
+    private async Task<IReadOnlyList<NextTreatmentItemDto>> NextTreatmentsAsync(string? scope, int userId, DateOnly today, CancellationToken ct)
+    {
+        var all = string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase);
+        var since = today.AddDays(-30);
+        var rows = await db.Bookings.AsNoTracking()
+            .Where(b => b.Status == BookingStatus.Completed && b.NextTreatmentDate != null && b.NextTreatmentDate >= since
+                        && b.NextBookingId == null
+                        && b.Customer.IsActive
+                        && (all || b.Customer.AssignedUserId == null || b.Customer.AssignedUserId == userId)
+                        && !db.Bookings.Any(x => x.CustomerId == b.CustomerId && x.Status == BookingStatus.Booked && x.BookingDate >= today))
+            .OrderBy(b => b.NextTreatmentDate).ThenBy(b => b.Customer.Name)
+            .Take(200)
+            .Select(b => new
+            {
+                b.Id, b.CustomerId, Customer = b.Customer.Name, b.Customer.WhatsAppNumber, Date = b.NextTreatmentDate!.Value,
+                Treatment = b.NextTreatment != null ? new NamedRef(b.NextTreatment.Id, b.NextTreatment.Name) : null,
+                Doctor = b.Doctor != null ? new NamedRef(b.Doctor.Id, b.Doctor.FullName) : null,
+            })
+            .ToListAsync(ct);
+        return rows.Select(r => new NextTreatmentItemDto(r.Id, r.CustomerId, r.Customer,
+            r.WhatsAppNumber is null ? null : ContactNormalizer.FormatPhone(r.WhatsAppNumber), r.Date, r.Treatment, r.Doctor)).ToList();
     }
 
     /// <summary>Counts for the sidebar badge and reminders, plus today's new enquiries for alerts.</summary>
