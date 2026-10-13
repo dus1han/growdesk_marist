@@ -220,6 +220,7 @@ builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<BookingExportService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<RecycleBinService>();
+builder.Services.AddScoped<FollowUpService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddSingleton<CaptureTokenService>();
 builder.Services.AddScoped<CaptureClientService>();

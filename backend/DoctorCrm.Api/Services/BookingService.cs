@@ -123,6 +123,7 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
     {
         var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == r.CustomerId && c.IsActive, ct)
             ?? throw new BusinessRuleException("Choose a customer.", field: "customerId");
+        FollowUpService.Stop(customer); // booked: nothing left to chase
 
         await EnsureDoctorAsync(r.DoctorId, null, ct);
         // Staff always choose a treatment; the WhatsApp BOT may not know it yet (chosen when completing).
@@ -295,6 +296,7 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
         booking.CancellationNote = Clean(r.Note);
 
         audit.Record(userId, "Booking Cancelled", nameof(Booking), id, new { reason = reason.Name });
+        await RestartFollowUpsAsync(booking, ct);
         await db.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
     }
@@ -308,8 +310,21 @@ public class BookingService(AppDbContext db, AuditService audit, StageAutomation
         booking.Status = BookingStatus.NoShow;
         booking.NoShowAt = DateTime.UtcNow;
         audit.Record(userId, "No Show", nameof(Booking), id);
+        await RestartFollowUpsAsync(booking, ct);
         await db.SaveChangesAsync(ct);
         return await GetAsync(id, ct);
+    }
+
+    /// <summary>
+    /// Cancelled or missed: follow the customer up again the next day, unless they still have
+    /// another consultation booked.
+    /// </summary>
+    private async Task RestartFollowUpsAsync(Booking booking, CancellationToken ct)
+    {
+        var today = await clock.TodayAsync(ct);
+        var stillBooked = await db.Bookings.AnyAsync(b => b.CustomerId == booking.CustomerId && b.Id != booking.Id
+                                                          && b.Status == BookingStatus.Booked && b.BookingDate >= today, ct);
+        if (!stillBooked) FollowUpService.Start(booking.Customer, today.AddDays(1));
     }
 
     /// <summary>The single gate for status changes: only Booked consultations can move.</summary>

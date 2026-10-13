@@ -94,6 +94,7 @@ public partial class CaptureService(AppDbContext db, AuditService audit, Contact
                 LeadSourceId = lead.LeadSourceId,
                 Notes = lead.Notes,
                 LastContactDate = today,
+                NextFollowUpDate = today, // a new enquiry is followed up the same day
             };
             foreach (var id in lead.TreatmentIds)
                 customer.Treatments.Add(new CustomerTreatment { TreatmentId = id, CreatedAt = DateTime.UtcNow });
@@ -189,6 +190,10 @@ public partial class CaptureService(AppDbContext db, AuditService audit, Contact
             if (!changed.Contains("CustomFields")) changed.Add("CustomFields");
         }
 
+        // Enquired again with nothing pending and nothing booked: back into today's follow-ups.
+        if (customer.NextFollowUpDate is null && !await db.Bookings.AnyAsync(b => b.CustomerId == customer.Id
+                && b.Status == BookingStatus.Booked && b.BookingDate >= today, ct))
+            FollowUpService.Start(customer, today);
         customer.LastContactDate = today;
         if (changed.Count > 0)
             audit.Record(null, "Customer Updated", nameof(Customer), customer.Id, new { fields = changed, source = "capture", client = clientName });

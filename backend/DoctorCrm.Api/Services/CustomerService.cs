@@ -189,7 +189,8 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
             c.LastContactDate, c.NextFollowUpDate, c.Notes, c.IsActive,
             c.Treatments.OrderBy(t => t.Treatment.DisplayOrder).Select(t => new NamedRef(t.TreatmentId, t.Treatment.Name)).ToList(),
             customFields, c.CreatedAt, c.UpdatedAt,
-            await db.Bookings.Where(b => b.CustomerId == c.Id).SumAsync(b => b.Balance, ct));
+            await db.Bookings.Where(b => b.CustomerId == c.Id).SumAsync(b => b.Balance, ct),
+            c.FollowUpAttempts);
     }
 
     public async Task<CustomerDetailDto> CreateAsync(SaveCustomerRequest request, int? userId, CancellationToken ct)
@@ -200,6 +201,8 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
 
         var customer = new Customer();
         await ApplyAsync(customer, request, isNew: true, ct);
+        // A new enquiry is followed up the same day, unless a date was chosen.
+        if (customer.NextFollowUpDate is null) FollowUpService.Start(customer, await clock.TodayAsync(ct));
         db.Customers.Add(customer);
         await db.SaveChangesAsync(ct);
 

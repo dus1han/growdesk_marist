@@ -1,5 +1,6 @@
 import {
   Ban,
+  BellRing,
   Bot,
   ClipboardType,
   CreditCard,
@@ -31,6 +32,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: "/administration/lead-sources", title: "Lead Sources", description: "Where customers come from", icon: Megaphone, permission: Permission.SettingsManage },
   { href: "/administration/custom-fields", title: "Custom Fields", description: "Extra customer fields of any type", icon: ClipboardType, permission: Permission.SettingsManage },
   { href: "/administration/capture-tool", title: "Capture Tool", description: "Fields on the CRM Capture toolbar for WhatsApp and Instagram", icon: PanelTop, permission: Permission.SettingsManage },
+  { href: "/administration/follow-ups", title: "Follow-ups", description: "How often to follow up, when to suggest Lost, and reminder times", icon: BellRing, permission: Permission.SettingsManage },
   { href: "/administration/whatsapp-bot", title: "WhatsApp BOT", description: "Opening hours and the bot's connection for leads and bookings", icon: Bot, permission: Permission.SettingsManage },
   { href: "/administration/cancellation-reasons", title: "Cancellation Reasons", description: "Reasons offered when cancelling a booking", icon: Ban, permission: Permission.SettingsManage },
   { href: "/administration/payment-methods", title: "Payment Methods", description: "Cash, card, bank transfer and others", icon: Wallet, permission: Permission.SettingsManage },

@@ -126,7 +126,7 @@ export function UserMenu({ user, collapsed }: { user: CurrentUser; collapsed: bo
                       className={cn(item, "text-foreground hover:bg-surface-muted focus-visible:bg-surface-muted")}
                     >
                       {sound ? <Volume2 className="size-4 text-muted" /> : <VolumeX className="size-4 text-muted" />}
-                      <span className="flex-1 text-left">Booking sound</span>
+                      <span className="flex-1 text-left">Alert sound</span>
                       <span className={cn("text-xs font-semibold", sound ? "text-brand" : "text-muted")}>{sound ? "On" : "Off"}</span>
                     </button>
                     {alerts !== "unsupported" && (

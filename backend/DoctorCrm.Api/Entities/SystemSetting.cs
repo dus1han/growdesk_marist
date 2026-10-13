@@ -21,4 +21,13 @@ public static class SettingKeys
 
     /// <summary>Length in minutes of a consultation booked by the WhatsApp BOT.</summary>
     public const string BotBookingMinutes = "booking.bot_minutes";
+
+    /// <summary>Days between follow-ups while a customer hasn't booked.</summary>
+    public const string FollowUpIntervalDays = "followup.interval_days";
+
+    /// <summary>Follow-ups after which staff are prompted to mark the customer Lost.</summary>
+    public const string FollowUpMaxAttempts = "followup.max_attempts";
+
+    /// <summary>Clinic-local times ("10:00,14:00,17:00") at which open screens remind about follow-ups.</summary>
+    public const string FollowUpReminderTimes = "followup.reminder_times";
 }

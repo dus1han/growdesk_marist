@@ -92,7 +92,9 @@ public record CustomerDetailDto(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     /// <summary>Total still owed on completed consultations; null for users who can't see payments.</summary>
-    decimal? Outstanding);
+    decimal? Outstanding,
+    /// <summary>Follow-ups logged since the cycle last started.</summary>
+    int FollowUpAttempts = 0);
 
 public record SaveCustomerRequest(
     string Name,

@@ -772,6 +772,10 @@ namespace DoctorCrm.Api.Data.Migrations
                         .HasColumnType("character varying(254)")
                         .HasColumnName("email");
 
+                    b.Property<int>("FollowUpAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("follow_up_attempts");
+
                     b.Property<string>("InstagramName")
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
@@ -784,6 +788,10 @@ namespace DoctorCrm.Api.Data.Migrations
                     b.Property<DateOnly?>("LastContactDate")
                         .HasColumnType("date")
                         .HasColumnName("last_contact_date");
+
+                    b.Property<DateTime?>("LastFollowUpAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_follow_up_at");
 
                     b.Property<int?>("LeadSourceId")
                         .HasColumnType("integer")

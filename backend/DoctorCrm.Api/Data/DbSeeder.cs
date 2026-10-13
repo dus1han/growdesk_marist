@@ -164,6 +164,9 @@ public class DbSeeder(AppDbContext db, IConfiguration config, ILogger<DbSeeder> 
             [SettingKeys.TimeZone] = "Asia/Dubai",
             [SettingKeys.OpeningHours] = BookingHoursService.DefaultDaysJson,
             [SettingKeys.BotBookingMinutes] = BookingHoursService.DefaultBotMinutes.ToString(),
+            [SettingKeys.FollowUpIntervalDays] = FollowUpService.DefaultIntervalDays.ToString(),
+            [SettingKeys.FollowUpMaxAttempts] = FollowUpService.DefaultMaxAttempts.ToString(),
+            [SettingKeys.FollowUpReminderTimes] = FollowUpService.DefaultReminderTimes,
         };
 
         var existing = await db.SystemSettings.Select(s => s.Key).ToListAsync(ct);

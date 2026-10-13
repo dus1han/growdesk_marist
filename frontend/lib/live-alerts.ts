@@ -77,9 +77,12 @@ export async function requestDesktopAlerts(): Promise<NotificationPermission | "
   return Notification.requestPermission();
 }
 
-/** Shown only while GrowDesk isn't the visible tab; clicking it brings GrowDesk forward. */
-export function showDesktopAlert(title: string, body: string, onClick: () => void) {
-  if (desktopAlertPermission() !== "granted" || document.visibilityState === "visible") return;
+/**
+ * Shown only while GrowDesk isn't the visible tab; clicking it brings GrowDesk forward.
+ * Returns whether a notification was shown.
+ */
+export function showDesktopAlert(title: string, body: string, onClick: () => void): boolean {
+  if (desktopAlertPermission() !== "granted" || document.visibilityState === "visible") return false;
   try {
     const n = new Notification(title, { body, icon: "/icon.svg", tag: `growdesk-${title}-${body}` });
     n.onclick = () => {
@@ -87,7 +90,9 @@ export function showDesktopAlert(title: string, body: string, onClick: () => voi
       onClick();
       n.close();
     };
+    return true;
   } catch {
     /* some browsers only allow notifications from a service worker */
+    return false;
   }
 }

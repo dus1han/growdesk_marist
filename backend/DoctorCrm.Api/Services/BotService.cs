@@ -254,6 +254,7 @@ public class BotService(
                 LeadSourceId = await SourceIdAsync(ct),
                 Notes = notes,
                 LastContactDate = today,
+                NextFollowUpDate = today, // followed up the same day, unless the bot books them now
             };
             foreach (var id in treatmentIds)
                 customer.Treatments.Add(new CustomerTreatment { TreatmentId = id, CreatedAt = DateTime.UtcNow });
@@ -301,6 +302,10 @@ public class BotService(
             audit.Record(null, "Treatment Added", nameof(Customer), customer.Id, new { treatments = names, source = SourceName, client });
         }
 
+        // Enquired again with nothing pending and nothing booked: back into today's follow-ups.
+        if (customer.NextFollowUpDate is null && !await db.Bookings.AnyAsync(b => b.CustomerId == customer.Id
+                && b.Status == BookingStatus.Booked && b.BookingDate >= today, ct))
+            FollowUpService.Start(customer, today);
         customer.LastContactDate = today;
         if (changed.Count > 0)
             audit.Record(null, "Customer Updated", nameof(Customer), customer.Id, new { fields = changed, source = SourceName, client });

@@ -1,14 +1,4 @@
-import {
-  CalendarPlus,
-  Check,
-  CircleAlert,
-  Layers,
-  Sparkles,
-  UserPlus,
-  UserRoundPen,
-  Wallet,
-  type LucideIcon,
-} from "lucide-react";
+import { CalendarPlus, Check, CircleAlert, Layers, PhoneCall, Sparkles, UserPlus, UserRoundPen, Wallet, type LucideIcon } from "lucide-react";
 import { formatMoney } from "@/components/bookings/booking-status";
 import { formatDate } from "@/lib/dates";
 import type { Activity } from "@/types/customers";
@@ -90,6 +80,16 @@ function describeAction(a: Pick<Activity, "action" | "details">): ActivityView {
               : formatMoney(amount)
             : undefined,
         tone: "bg-emerald-50 text-emerald-600",
+      };
+    }
+    case "Follow-up Logged": {
+      const outcome = { CallBack: "Spoke · call back", NoAnswer: "No answer", NotInterested: "Not interested" }[String(d.outcome)] ?? "Followed up";
+      const parts = [d.note ? String(d.note) : null, d.next ? `next on ${formatDate(String(d.next))}` : null].filter(Boolean);
+      return {
+        icon: PhoneCall,
+        title: `Follow-up: ${outcome}`,
+        detail: parts.length > 0 ? parts.join(" · ") : undefined,
+        tone: d.outcome === "NotInterested" ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-600",
       };
     }
     case "Balance Waived":

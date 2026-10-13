@@ -80,6 +80,8 @@ export interface CustomerDetail {
   updatedAt: string;
   /** Still owed on completed consultations; null for users who can't see payments. */
   outstanding: number | null;
+  /** Follow-ups logged since the cycle last started. */
+  followUpAttempts: number;
 }
 
 export interface SaveCustomer {

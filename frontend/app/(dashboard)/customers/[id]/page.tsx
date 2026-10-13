@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Pencil,
   Phone,
+  PhoneCall,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { CustomerBookingsCard } from "@/components/customers/customer-bookings-c
 import { CustomerPaymentsCard } from "@/components/customers/customer-payments-card";
 import { whatsAppUrl } from "@/components/customers/whatsapp-link";
 import { CustomerFormDrawer } from "@/components/customers/customer-form-drawer";
+import { LogFollowUpDrawer } from "@/components/follow-ups/log-follow-up-drawer";
 import { ConsultationBadge } from "@/components/customers/consultation-badge";
 import { StageBadge } from "@/components/customers/stage-badge";
 import { RequirePermission } from "@/components/layout/require-permission";
@@ -68,6 +70,7 @@ function Profile({ id }: { id: number }) {
   const [editing, setEditing] = useState(false);
   const [booking, setBooking] = useState(false);
   const [openBookingId, setOpenBookingId] = useState<number | null>(null);
+  const [followingUp, setFollowingUp] = useState(false);
 
   if (isPending) return <ProfileSkeleton />;
   if (error || !customer) {
@@ -95,7 +98,18 @@ function Profile({ id }: { id: number }) {
         <ArrowLeft className="size-4" /> Customers
       </Link>
 
-      <ProfileHeader customer={customer} canManage={canManage} onEdit={() => setEditing(true)} onBook={canBook ? () => setBooking(true) : undefined} />
+      <ProfileHeader
+        customer={customer}
+        canManage={canManage}
+        onEdit={() => setEditing(true)}
+        onBook={canBook ? () => setBooking(true) : undefined}
+        onFollowUp={canManage ? () => setFollowingUp(true) : undefined}
+      />
+      <LogFollowUpDrawer
+        target={followingUp ? { id: customer.id, name: customer.name, whatsApp: customer.whatsApp, attempts: customer.followUpAttempts } : null}
+        onClose={() => setFollowingUp(false)}
+        onBook={canBook ? () => setBooking(true) : undefined}
+      />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
@@ -129,6 +143,11 @@ function Profile({ id }: { id: number }) {
             <dl className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2">
               <Detail label="Next follow-up">
                 <FollowUpValue date={customer.nextFollowUpDate} />
+                {customer.followUpAttempts > 0 && (
+                  <span className="mt-0.5 block text-xs font-normal text-muted">
+                    {customer.followUpAttempts} follow-up{customer.followUpAttempts === 1 ? "" : "s"} so far
+                  </span>
+                )}
               </Detail>
               <Detail label="Last contact">{customer.lastContactDate ? formatDate(customer.lastContactDate) : <Empty />}</Detail>
               <Detail label="Instagram">
@@ -193,11 +212,13 @@ function ProfileHeader({
   canManage,
   onEdit,
   onBook,
+  onFollowUp,
 }: {
   customer: CustomerDetail;
   canManage: boolean;
   onEdit: () => void;
   onBook?: () => void;
+  onFollowUp?: () => void;
 }) {
   return (
     <Card className="relative overflow-hidden p-5 sm:p-6">
@@ -229,6 +250,11 @@ function ProfileHeader({
           {canManage && (
             <Button variant="secondary" onClick={onEdit}>
               <Pencil className="size-4" /> Edit
+            </Button>
+          )}
+          {onFollowUp && (
+            <Button variant="secondary" onClick={onFollowUp}>
+              <PhoneCall className="size-4" /> Log follow-up
             </Button>
           )}
           {onBook && (

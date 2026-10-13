@@ -179,7 +179,7 @@ export function FollowUps({ items, loading }: { items: DashboardFollowUp[] | und
       <CardHeader
         title="Follow-ups"
         description="Overdue, due today and the next 7 days"
-        action={items && items.length > 0 ? <ViewAll href="/customers?followup=soon" /> : undefined}
+        action={<ViewAll href="/follow-ups" />}
       />
       {loading ? (
         <RowsSkeleton rows={3} />

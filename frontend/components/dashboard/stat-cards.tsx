@@ -20,7 +20,8 @@ interface Stat {
   noteTone?: string;
 }
 
-const count = (n: number) => n.toLocaleString();
+/** Whole numbers, also mid-animation (5 → 6 must never show "5.978"). */
+const count = (n: number) => Math.round(n).toLocaleString();
 
 function changeNote(today: number, yesterday: number): { note: string; tone?: string } {
   const diff = today - yesterday;

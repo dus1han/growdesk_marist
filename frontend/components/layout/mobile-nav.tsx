@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogoMark } from "@/components/ui/logo";
+import { useFollowUpSummary } from "@/lib/api/follow-ups";
 import { useBranding } from "@/lib/auth/session";
 import { can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -71,7 +72,7 @@ export function MobileNav({ user }: { user: CurrentUser }) {
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
       >
         <ul className="grid" style={{ gridTemplateColumns: `repeat(${Math.max(primary.length, 1)}, minmax(0, 1fr))` }}>
-          {primary.map(({ href, label, icon: Icon }) => {
+          {primary.map(({ href, label, icon: Icon, badge }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <li key={href}>
@@ -90,7 +91,10 @@ export function MobileNav({ user }: { user: CurrentUser }) {
                       transition={{ type: "spring", stiffness: 500, damping: 38 }}
                     />
                   )}
-                  <Icon className="size-5" />
+                  <span className="relative">
+                    <Icon className="size-5" />
+                    {badge === "followUps" && <FollowUpDot />}
+                  </span>
                   {label}
                 </Link>
               </li>
@@ -99,5 +103,22 @@ export function MobileNav({ user }: { user: CurrentUser }) {
         </ul>
       </nav>
     </>
+  );
+}
+
+/** Follow-ups due now, on the bottom bar icon. */
+function FollowUpDot() {
+  const { data } = useFollowUpSummary();
+  if (!data || data.due === 0) return null;
+  return (
+    <span
+      aria-label={`${data.due} follow-ups due`}
+      className={cn(
+        "absolute -right-2.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-4 text-white",
+        data.overdue > 0 ? "bg-danger" : "bg-brand",
+      )}
+    >
+      {data.due > 99 ? "99+" : data.due}
+    </span>
   );
 }

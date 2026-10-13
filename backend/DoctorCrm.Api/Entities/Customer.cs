@@ -31,7 +31,14 @@ public class Customer : AuditableEntity, ISoftDeletable
     public LeadSource? LeadSource { get; set; }
 
     public DateOnly? LastContactDate { get; set; }
+    /// <summary>When to follow up next; null when nothing is pending (e.g. booked, lost).</summary>
     public DateOnly? NextFollowUpDate { get; set; }
+
+    /// <summary>Follow-ups logged since the cycle last started (a new enquiry, cancellation or no-show).</summary>
+    public int FollowUpAttempts { get; set; }
+
+    /// <summary>When a follow-up was last logged. Null: never contacted (a new enquiry).</summary>
+    public DateTime? LastFollowUpAt { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 

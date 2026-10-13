@@ -176,7 +176,9 @@ public class CustomerIntegrationTests(ApiFactory factory) : IClassFixture<ApiFac
             Customer("Maria Lopez", NewNumber(), treatments: [treatments[0].Id])));
 
         var updated = await DataAsync<CustomerDetailDto>(await admin.PutAsJsonAsync($"/api/customers/{created.Id}",
-            Customer("Maria Lopez", created.WhatsApp, treatments: [treatments[0].Id, treatments[1].Id], stageId: followUp.Id)));
+            // As the edit form does: the follow-up date set when she was added is sent back unchanged.
+            Customer("Maria Lopez", created.WhatsApp, treatments: [treatments[0].Id, treatments[1].Id], stageId: followUp.Id)
+                with { NextFollowUpDate = created.NextFollowUpDate }));
         Assert.Equal(followUp.Id, updated.Stage.Id);
         Assert.Equal(2, updated.Treatments.Count);
 

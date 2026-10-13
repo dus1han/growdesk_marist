@@ -5,6 +5,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoMark } from "@/components/ui/logo";
+import { useFollowUpSummary } from "@/lib/api/follow-ups";
 import { useBranding } from "@/lib/auth/session";
 import { can } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -125,7 +126,7 @@ function NavGroup({
 
   return (
     <ul className="space-y-1">
-      {items.map(({ href, label, icon: Icon }) => {
+      {items.map(({ href, label, icon: Icon, badge }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <li key={href} className="group relative">
@@ -149,6 +150,7 @@ function NavGroup({
               )}
               <Icon className="relative size-[18px] shrink-0" />
               {!collapsed && <span className="relative truncate">{label}</span>}
+              {badge === "followUps" && <FollowUpCount collapsed={collapsed} />}
             </Link>
 
             {/* Tooltip when collapsed */}
@@ -164,5 +166,27 @@ function NavGroup({
         );
       })}
     </ul>
+  );
+}
+
+/** Follow-ups due now (overdue in red). Hidden when there are none. */
+function FollowUpCount({ collapsed }: { collapsed: boolean }) {
+  const { data } = useFollowUpSummary();
+  if (!data || data.due === 0) return null;
+  return (
+    <motion.span
+      key={data.due}
+      initial={{ scale: 0.6, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 500, damping: 25 }}
+      aria-label={`${data.due} follow-ups due${data.overdue ? `, ${data.overdue} overdue` : ""}`}
+      className={cn(
+        "relative ml-auto flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-5 text-white",
+        data.overdue > 0 ? "bg-danger" : "bg-brand",
+        collapsed && "absolute right-1 top-1 ml-0 min-w-4 px-1 text-[10px] leading-4",
+      )}
+    >
+      {data.due > 99 ? "99+" : data.due}
+    </motion.span>
   );
 }
