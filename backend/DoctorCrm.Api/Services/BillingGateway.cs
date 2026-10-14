@@ -117,7 +117,9 @@ public class StripeBillingGateway(BillingConfigStore config) : IBillingGateway
             Customer = customerId,
             Status = "all",
             Limit = 10,
-            Expand = ["data.default_payment_method", "data.items.data.price.product"],
+            // Stripe allows at most 4 levels: the items' price comes with the subscription anyway;
+            // expanding its product as well ("data.items.data.price.product") is refused.
+            Expand = ["data.default_payment_method"],
         }, cancellationToken: ct);
 
         // The running subscription if there is one, otherwise the most recent one that ended.
