@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GrowDesk Capture",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Capture leads from WhatsApp Web and Instagram straight into GrowDesk: highlight, right-click, save.",
   "permissions": [
     "storage",
@@ -51,5 +51,5 @@
     "http://*/*"
   ],
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAj/f/QaSybxUNgTOSBUH5t64td9+MXHDOCSHhQDA1bUQ0dEJ9uOUVXNeIfQYk1ptmJCUXq/r18kfIqugrMu/Nze85Io08aQQri3jinMiFSyaIRpwzWaRT4z/DnLH6W6uVqPX/+gCaQGzq6Zt/6zCXx1p09qH/khJmZAIJgezJUK3jxZ5TC+mD3cd+LwL7HnBIsFoEs2UX81kGPxcgMtBW7Msw+SHDGPKZwDabkt/yck5OBML3wOXsVcDNta2GHjF8MAvVV3DBZCObfBphePuG9fXwS8nG8axY+boBckPn3J1ajhIYTOK3AvkbcOx1XsZRkfrOuS8fVaEBPO1adKpl2QIDAQAB",
-  "update_url": "http://169.58.92.105:3110/capture/update.xml"
+  "update_url": "https://marist.growdesk.site/capture/update.xml"
 }

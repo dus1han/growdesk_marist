@@ -24,8 +24,8 @@ const ALL_PLATFORM_CLASSES = Object.values(PLATFORM_CLASS);
  *
  * Instagram scrolls in normal document flow, so it only needs the offset; a
  * height clamp there would break page scrolling. Rules are therefore scoped
- * per platform. Instagram's Messages pages are the exception: see
- * watchInstagramLayout().
+ * per platform. WhatsApp and Instagram's Messages pages are full-window apps:
+ * see watchAppLayout().
  */
 export function applyPageOffset(platform: Platform): void {
   const root = document.documentElement;
@@ -52,14 +52,16 @@ export function applyPageOffset(platform: Platform): void {
       }
 
       /*
-       * Instagram Messages: a fixed, full-window app that a margin can't move. A transform on
-       * <body> makes it the containing block for position: fixed, so the app sits below the
-       * toolbar; the page itself doesn't scroll there.
+       * Full-window apps (WhatsApp, Instagram Messages): panels sized to the window, sometimes
+       * position: fixed, that a margin can't move. A transform on <body> makes it the containing
+       * block for position: fixed, so the app sits below the toolbar, and the page itself must
+       * not scroll: otherwise focusing the message box scrolls the whole chat out of place.
        */
-      html.${OFFSET_CLASS}.${INSTAGRAM_APP_CLASS} {
+      html.${OFFSET_CLASS}.${APP_CLASS} {
         height: calc(100% - ${TOOLBAR_HEIGHT}px) !important;
+        overflow: hidden !important;
       }
-      html.${OFFSET_CLASS}.${INSTAGRAM_APP_CLASS} > body {
+      html.${OFFSET_CLASS}.${APP_CLASS} > body {
         height: 100% !important;
         min-height: 0 !important;
         overflow: hidden !important;
@@ -76,45 +78,54 @@ export function applyPageOffset(platform: Platform): void {
 
 export function removePageOffset(): void {
   const root = document.documentElement;
-  root.classList.remove(OFFSET_CLASS, INSTAGRAM_APP_CLASS, ...ALL_PLATFORM_CLASSES);
+  root.classList.remove(OFFSET_CLASS, APP_CLASS, ...ALL_PLATFORM_CLASSES);
   document.getElementById(STYLE_ID)?.remove();
   releaseViewportHeights();
 }
 
-const INSTAGRAM_APP_CLASS = 'crm-instagram-app';
+const APP_CLASS = 'crm-capture-app';
 const CLAMP_ATTR = 'data-crm-capture-clamped';
 /** How far into the page to look for full-window panels (they sit near the top of the tree). */
 const MAX_DEPTH = 12;
 const MAX_NODES = 1500;
 
-/** Instagram's Messages pages, which are laid out as an app rather than a scrolling page. */
-function isInstagramApp(): boolean {
-  return location.pathname.startsWith('/direct');
+/**
+ * Pages laid out as a full-window app rather than a scrolling page: all of WhatsApp Web, and
+ * Instagram's Messages.
+ */
+function isAppPage(platform: Platform): boolean {
+  return platform === 'WhatsApp' || location.pathname.startsWith('/direct');
 }
 
 /**
- * Keeps Instagram's Messages pages below the toolbar. Instagram navigates without reloading, so
- * the page type is checked as you move around. Only layout is touched; page content is never read.
+ * Keeps full-window apps entirely below the toolbar, message box included. The sites rebuild
+ * their layout as you navigate (and Instagram changes page without reloading), so this is
+ * checked as you go. Only layout is touched; page content is never read.
  */
-export function watchInstagramLayout(): () => void {
+export function watchAppLayout(platform: Platform): () => void {
   const tick = () => {
     const root = document.documentElement;
-    if (!root.classList.contains(OFFSET_CLASS) || !isInstagramApp()) {
-      if (root.classList.contains(INSTAGRAM_APP_CLASS)) {
-        root.classList.remove(INSTAGRAM_APP_CLASS);
+    if (!root.classList.contains(OFFSET_CLASS) || !isAppPage(platform)) {
+      if (root.classList.contains(APP_CLASS)) {
+        root.classList.remove(APP_CLASS);
         releaseViewportHeights();
       }
       return;
     }
-    root.classList.add(INSTAGRAM_APP_CLASS);
+    root.classList.add(APP_CLASS);
     fitViewportHeights();
+    // Focusing a field the browser thought was off-screen scrolls the page itself: undo that.
+    const scroller = document.scrollingElement;
+    if (scroller && scroller.scrollTop !== 0) scroller.scrollTop = 0;
   };
   tick();
   const timer = window.setInterval(tick, 700);
   window.addEventListener('resize', tick);
+  window.addEventListener('scroll', tick, { passive: true });
   return () => {
     window.clearInterval(timer);
     window.removeEventListener('resize', tick);
+    window.removeEventListener('scroll', tick);
   };
 }
 

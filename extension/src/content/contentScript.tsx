@@ -6,7 +6,7 @@ import type { ConfigBundle } from '../types/growdesk';
 import type { ContentMessage, SaveResponse, StateResponse } from '../types/messages';
 import { isStatePush } from '../types/messages';
 import { detectPlatform } from '../utils/platform';
-import { applyPageOffset, OFFSET_CLASS, removePageOffset, TOOLBAR_HEIGHT, watchInstagramLayout } from './pageOffset';
+import { applyPageOffset, OFFSET_CLASS, removePageOffset, TOOLBAR_HEIGHT, watchAppLayout } from './pageOffset';
 import type { ConfigField } from '../types/growdesk';
 import { mergeHighlight, normalizeSelection } from '../utils/normalize';
 import { BoxPicker } from './toolbar/BoxPicker';
@@ -337,7 +337,7 @@ function mount(): void {
   }
 
   keepMounted(host, platform);
-  const stopLayoutWatch = platform === 'Instagram' ? watchInstagramLayout() : () => undefined;
+  const stopLayoutWatch = watchAppLayout(platform);
 
   window.addEventListener(
     'pagehide',
