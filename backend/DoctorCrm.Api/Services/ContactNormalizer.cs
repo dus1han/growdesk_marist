@@ -32,7 +32,18 @@ public partial class ContactNormalizer(IConfiguration config)
         var parsed = TryParse(text, _defaultRegion);
         if (parsed is null && !text.StartsWith('+'))
             parsed = TryParse("+" + new string(text.Where(char.IsDigit).ToArray()), null);
-        return parsed;
+        return parsed ?? MexicanMobile(text);
+    }
+
+    /// <summary>
+    /// Mexico dropped the "1" between +52 and mobile numbers in 2019, but WhatsApp still shows many
+    /// as "+52 1 55 1234 5678", which is one digit too long to be valid. Stored without the 1, so
+    /// both ways of writing the number find the same customer.
+    /// </summary>
+    private static string? MexicanMobile(string text)
+    {
+        var digits = new string(text.Where(char.IsDigit).ToArray());
+        return digits.Length == 13 && digits.StartsWith("521") ? TryParse("+52" + digits[3..], null) : null;
     }
 
     private static string? TryParse(string text, string? region)

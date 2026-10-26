@@ -23,6 +23,14 @@ public class ContactNormalizerTests
     [InlineData("+44 7911 123456", "+447911123456")]
     [InlineData("447911123456", "+447911123456")]
     [InlineData("+61 412 345 678", "+61412345678")]
+    [InlineData("+52 1 55 1234 5678", "+525512345678")]    // Mexico, old mobile format WhatsApp still shows
+    [InlineData("+5215512345678", "+525512345678")]
+    [InlineData("5215512345678", "+525512345678")]
+    [InlineData("+52 55 1234 5678", "+525512345678")]
+    [InlineData("+52 1 (33) 1234-5678", "+523312345678")]
+    [InlineData("+1 (646) 222-3344", "+16462223344")]      // USA
+    [InlineData("1 646 222 3344", "+16462223344")]
+    [InlineData("001 213 373 4253", "+12133734253")]
     [InlineData("+1 415 555 2671", "+14155552671")]
     [InlineData("12345", null)]
     [InlineData("not a number", null)]
