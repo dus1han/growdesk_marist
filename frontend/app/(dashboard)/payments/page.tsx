@@ -38,12 +38,14 @@ export default function PaymentsPage() {
   const { data: session } = useSession();
   const canRecord = can(session?.user, Permission.PaymentsManage);
   const methods = useActiveLookup("payment-methods");
+  const sources = useActiveLookup("lead-sources");
 
   const [tab, setTab] = useState<Tab>("received");
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<DateRange>({});
   const [status, setStatus] = useState<string | undefined>();
   const [method, setMethod] = useState<string | undefined>();
+  const [source, setSource] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [openBooking, setOpenBooking] = useState<number | null>(null);
   const [recording, setRecording] = useState<PendingPayment | null>(null);
@@ -56,6 +58,7 @@ export default function PaymentsPage() {
     to: range.to,
     status,
     paymentMethodId: method ? Number(method) : undefined,
+    leadSourceId: source ? Number(source) : undefined,
   };
   const reset = () => setPage(1);
   const switchTab = (next: Tab) => {
@@ -63,11 +66,11 @@ export default function PaymentsPage() {
     setPage(1);
   };
   const received = usePayments({ ...query, page, pageSize: PAGE_SIZE }, tab === "received");
-  const outstanding = useOutstanding({ search: query.search, page, pageSize: PAGE_SIZE }, tab === "outstanding");
+  const outstanding = useOutstanding({ search: query.search, leadSourceId: query.leadSourceId, page, pageSize: PAGE_SIZE }, tab === "outstanding");
   const summary = usePaymentSummary(query);
   const currency = summary.data?.currency ?? "AED";
   const money = useCallback((n: number) => formatMoney(n, currency), [currency]);
-  const filtered = !!(debounced || range.from || range.to || status || method);
+  const filtered = !!(debounced || range.from || range.to || status || method || source);
 
   const exportExcel = async () => {
     setExporting(true);
@@ -180,6 +183,12 @@ export default function PaymentsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <SearchInput value={search} onChange={(v) => { setSearch(v); reset(); }} placeholder="Search by customer name or number…" className="flex-1 sm:max-w-sm" />
+            <FilterMenu
+              label="Lead source"
+              value={source}
+              onChange={(v) => { setSource(v); reset(); }}
+              options={sources.data?.map((s) => ({ value: String(s.id), label: s.name })) ?? []}
+            />
             {tab === "received" && (
               <>
                 <DateRangeFilter value={range} onChange={(r) => { setRange(r); reset(); }} />
@@ -238,8 +247,8 @@ export default function PaymentsPage() {
             emptyState={
               <EmptyState
                 icon={PartyPopper}
-                title={debounced ? "Nobody matching owes anything" : "Nothing outstanding"}
-                description={debounced ? "Try another name or number." : "Every completed consultation is paid or waived."}
+                title={debounced || source ? "Nobody matching owes anything" : "Nothing outstanding"}
+                description={debounced || source ? "Try another search or lead source." : "Every completed consultation is paid or waived."}
                 className="py-16"
               />
             }
@@ -327,6 +336,7 @@ function PaymentRow({ p, index, currency, onOpen }: { p: PaymentListItem; index:
           <p className="truncate font-semibold">{p.customer.name}</p>
           <p className="mt-0.5 truncate text-xs text-muted">
             Consultation {formatDate(p.booking.date)}, {formatTime(p.booking.startTime)} · {p.booking.treatments.join(" + ")}
+            {p.leadSource && ` · ${p.leadSource}`}
           </p>
         </div>
         <div className="hidden text-right text-xs text-muted sm:block">
@@ -374,6 +384,7 @@ function OutstandingRow({
           <p className="truncate font-semibold">{o.customer.name}</p>
           <p className="mt-0.5 truncate text-xs text-muted">
             Consultation {formatDate(o.date)}, {formatTime(o.startTime)} · {o.treatments.join(" + ")}
+            {o.leadSource && ` · ${o.leadSource}`}
           </p>
         </div>
         <div className="hidden text-right text-xs text-muted sm:block">

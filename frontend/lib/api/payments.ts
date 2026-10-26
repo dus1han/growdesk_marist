@@ -22,7 +22,14 @@ export function usePayments(q: PaymentQuery, enabled = true) {
 
 /** Summary uses the same filters, minus paging and status (see backend PaymentSummaryDto). */
 export function usePaymentSummary(q: PaymentQuery, enabled = true) {
-  const filters: PaymentQuery = { from: q.from, to: q.to, paymentMethodId: q.paymentMethodId, customerId: q.customerId, search: q.search };
+  const filters: PaymentQuery = {
+    from: q.from,
+    to: q.to,
+    paymentMethodId: q.paymentMethodId,
+    customerId: q.customerId,
+    leadSourceId: q.leadSourceId,
+    search: q.search,
+  };
   return useQuery({
     queryKey: ["payments", "summary", filters],
     queryFn: ({ signal }) => api.get<PaymentSummary>(`/payments/summary?${paymentQueryString(filters)}`, { signal }),
@@ -32,7 +39,10 @@ export function usePaymentSummary(q: PaymentQuery, enabled = true) {
 }
 
 /** Completed consultations still owed money, oldest first. */
-export function useOutstanding(q: { customerId?: number; search?: string; page?: number; pageSize?: number }, enabled = true) {
+export function useOutstanding(
+  q: { customerId?: number; leadSourceId?: number; search?: string; page?: number; pageSize?: number },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["payments", "outstanding", q],
     queryFn: ({ signal }) => api.get<Paged<OutstandingItem>>(`/payments/outstanding?${paymentQueryString(q)}`, { signal }),

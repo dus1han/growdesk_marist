@@ -37,7 +37,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
             .GroupBy(_ => 1).Select(g => new { Sum = g.Sum(p => p.Amount), Count = g.Count() }).FirstOrDefaultAsync(ct);
 
         // Outstanding: every balance still owed today, whatever the range.
-        var owed = FilterOutstanding(new OutstandingQuery { CustomerId = q.CustomerId, Search = q.Search });
+        var owed = FilterOutstanding(new OutstandingQuery { CustomerId = q.CustomerId, LeadSourceId = q.LeadSourceId, Search = q.Search });
         var outstanding = await owed.GroupBy(_ => 1).Select(g => new { Sum = g.Sum(b => b.Balance), Count = g.Count() }).FirstOrDefaultAsync(ct);
 
         var currency = (await settings.GetAsync(ct)).Currency;
@@ -63,7 +63,8 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
                 new NamedRef(b.Customer.Id, b.Customer.Name),
                 b.BookingDate, b.StartTime,
                 b.Treatments.OrderBy(t => t.Treatment.DisplayOrder).Select(t => t.Treatment.Name).ToList(),
-                b.ConsultationCharge ?? 0, b.AmountPaid, b.Balance))
+                b.ConsultationCharge ?? 0, b.AmountPaid, b.Balance,
+                b.Customer.LeadSource != null ? b.Customer.LeadSource.Name : null))
             .ToListAsync(ct);
         return new PagedResult<OutstandingItemDto>(items, page, size, total);
     }
@@ -145,6 +146,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
     {
         var query = db.Bookings.AsNoTracking().Where(b => b.Balance > 0);
         if (q.CustomerId is { } customerId) query = query.Where(b => b.CustomerId == customerId);
+        if (q.LeadSourceId is { } sourceId) query = query.Where(b => b.Customer.LeadSourceId == sourceId);
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
             var (like, handle, digits, digitsLike) = SearchTerms(q.Search);
@@ -175,7 +177,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
 
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Payments");
-        string[] headers = ["Recorded", "Customer", "Consultation date", "Treatments", $"Amount ({locale.Currency})", "Status", "Method", "Paid on", "Recorded by"];
+        string[] headers = ["Recorded", "Customer", "Consultation date", "Treatments", $"Amount ({locale.Currency})", "Status", "Method", "Paid on", "Recorded by", "Lead source"];
         for (var c = 0; c < headers.Length; c++) sheet.Cell(1, c + 1).Value = headers[c];
 
         var r = 2;
@@ -190,6 +192,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
             sheet.Cell(r, 7).Value = p.Method?.Name ?? "";
             if (p.PaymentDate is { } paid) sheet.Cell(r, 8).Value = TimeZoneInfo.ConvertTimeFromUtc(paid, zone);
             sheet.Cell(r, 9).Value = p.RecordedBy ?? "";
+            sheet.Cell(r, 10).Value = p.LeadSource ?? "";
             r++;
         }
 
@@ -217,7 +220,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
-        audit.Record(userId, "Payments Exported", nameof(Payment), null, new { rows = rows.Count, q.From, q.To, q.Status });
+        audit.Record(userId, "Payments Exported", nameof(Payment), null, new { rows = rows.Count, q.From, q.To, q.Status, q.LeadSourceId });
         await db.SaveChangesAsync(ct);
         return (stream.ToArray(), $"payments-{DateTime.UtcNow:yyyy-MM-dd-HHmm}.xlsx");
     }
@@ -229,6 +232,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
         if (includeStatus && Enum.TryParse<PaymentStatus>(q.Status, true, out var status)) query = query.Where(p => p.Status == status);
         if (q.PaymentMethodId is { } methodId) query = query.Where(p => p.PaymentMethodId == methodId);
         if (q.CustomerId is { } customerId) query = query.Where(p => p.CustomerId == customerId);
+        if (q.LeadSourceId is { } sourceId) query = query.Where(p => p.Customer.LeadSourceId == sourceId);
         if (includeDates && q.From is { } from)
         {
             var start = await clock.StartOfDayUtcAsync(from, ct);
@@ -261,5 +265,6 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
             p.PaymentDate,
             p.CreatedAt,
             p.CreatedBy != null ? p.CreatedBy.FullName : null,
-            p.Booking.Balance));
+            p.Booking.Balance,
+            p.Customer.LeadSource != null ? p.Customer.LeadSource.Name : null));
 }

@@ -78,6 +78,25 @@ public class PaymentIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
     }
 
     [Fact]
+    public async Task Lead_source_filters_payments_outstanding_and_totals()
+    {
+        var admin = await AdminAsync();
+        var s = await SeedAsync(admin); // the customer came from lead source 1
+        var sources = await DataAsync<List<LookupItemDto>>(await admin.GetAsync("/api/lead-sources"));
+        var other = sources.First(x => x.Id != 1).Id;
+
+        var mine = await DataAsync<PagedResult<PaymentListItemDto>>(await admin.GetAsync($"/api/payments?customerId={s.Customer.Id}&leadSourceId=1"));
+        Assert.Equal(2, mine.TotalCount);
+        Assert.All(mine.Items, p => Assert.Equal(sources.Single(x => x.Id == 1).Name, p.LeadSource));
+        Assert.Equal(0, (await DataAsync<PagedResult<PaymentListItemDto>>(await admin.GetAsync($"/api/payments?customerId={s.Customer.Id}&leadSourceId={other}"))).TotalCount);
+
+        var summary = await DataAsync<PaymentSummaryDto>(await admin.GetAsync($"/api/payments/summary?customerId={s.Customer.Id}&leadSourceId={other}"));
+        Assert.Equal((0m, 0m), (summary.Collected, summary.Outstanding));
+        var owing = await DataAsync<PagedResult<OutstandingItemDto>>(await admin.GetAsync($"/api/payments/outstanding?customerId={s.Customer.Id}&leadSourceId=1"));
+        Assert.Equal(2, owing.TotalCount);
+    }
+
+    [Fact]
     public async Task Paid_more_than_the_amount_or_without_a_method_is_refused()
     {
         var admin = await AdminAsync();

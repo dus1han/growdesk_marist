@@ -14,6 +14,8 @@ export interface PaymentListItem {
   recordedBy: string | null;
   /** What the consultation still owes now. */
   bookingBalance: number;
+  /** Where the customer came from. */
+  leadSource: string | null;
 }
 
 /** A completed consultation that still has a balance. */
@@ -26,6 +28,7 @@ export interface OutstandingItem {
   charge: number;
   paid: number;
   balance: number;
+  leadSource: string | null;
 }
 
 export interface PaymentSummary {
@@ -44,6 +47,7 @@ export interface PaymentQuery {
   status?: string;
   paymentMethodId?: number;
   customerId?: number;
+  leadSourceId?: number;
   search?: string;
   page?: number;
   pageSize?: number;

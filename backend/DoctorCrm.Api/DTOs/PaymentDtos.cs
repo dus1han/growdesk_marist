@@ -10,6 +10,8 @@ public record PaymentQuery
     public string? Status { get; set; }
     public int? PaymentMethodId { get; set; }
     public int? CustomerId { get; set; }
+    /// <summary>The customer's lead source.</summary>
+    public int? LeadSourceId { get; set; }
     /// <summary>Customer name, WhatsApp number or Instagram name.</summary>
     public string? Search { get; set; }
     public int Page { get; set; } = 1;
@@ -30,7 +32,9 @@ public record PaymentListItemDto(
     DateTime CreatedAt,
     string? RecordedBy,
     /// <summary>What the consultation still owes now, after every entry.</summary>
-    decimal BookingBalance);
+    decimal BookingBalance,
+    /// <summary>Where the customer came from.</summary>
+    string? LeadSource = null);
 
 /// <summary>
 /// Totals for the filtered range. Collected and waived count entries recorded in the range;
@@ -49,6 +53,7 @@ public record PaymentSummaryDto(
 public record OutstandingQuery
 {
     public int? CustomerId { get; set; }
+    public int? LeadSourceId { get; set; }
     public string? Search { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 25;
@@ -63,7 +68,8 @@ public record OutstandingItemDto(
     IReadOnlyList<string> Treatments,
     decimal Charge,
     decimal Paid,
-    decimal Balance);
+    decimal Balance,
+    string? LeadSource = null);
 
 /// <summary>Money received for a consultation: any amount up to its balance (part payments allowed).</summary>
 public record RecordPaymentRequest(decimal Amount, int PaymentMethodId, DateOnly? PaymentDate);
