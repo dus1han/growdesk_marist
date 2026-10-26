@@ -37,7 +37,7 @@ export function useUserOptions() {
 
 // ---- Customers --------------------------------------------------------------------------------------
 
-function toQueryString(f: CustomerFilters) {
+export function toQueryString(f: CustomerFilters) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(f)) {
     if (value !== undefined && value !== null && value !== "") params.set(key, String(value));

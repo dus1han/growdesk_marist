@@ -18,41 +18,7 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
     {
         var page = Math.Max(1, q.Page);
         var size = Math.Clamp(q.PageSize, 1, MaxPageSize);
-        var query = db.Customers.AsNoTracking().Where(c => c.IsActive);
-
-        if (!string.IsNullOrWhiteSpace(q.Search))
-        {
-            var term = q.Search.Trim();
-            var like = $"%{term}%";
-            var handle = $"%{term.TrimStart('@').ToLowerInvariant()}%";
-            // Numbers are stored with the country code, so "050 123" must match "+97150123…".
-            var digits = new string(term.Where(char.IsDigit).ToArray()).TrimStart('0');
-            var digitsLike = $"%{digits}%";
-            query = query.Where(c => EF.Functions.ILike(c.Name, like)
-                                     || (c.InstagramName != null && EF.Functions.Like(c.InstagramName, handle))
-                                     || (digits.Length >= 3 && c.WhatsAppNumber != null && EF.Functions.Like(c.WhatsAppNumber, digitsLike))
-                                     || (digits.Length >= 3 && c.SecondaryPhone != null && EF.Functions.Like(c.SecondaryPhone, digitsLike)));
-        }
-
-        if (q.StageId is { } stageId) query = query.Where(c => c.StageId == stageId);
-        query = FilterConsultation(query, q.Consultation);
-        if (q.TreatmentId is { } treatmentId) query = query.Where(c => c.Treatments.Any(t => t.TreatmentId == treatmentId));
-        if (q.LeadSourceId is { } sourceId) query = query.Where(c => c.LeadSourceId == sourceId);
-        if (q.AssignedUserId is { } userId) query = query.Where(c => c.AssignedUserId == userId);
-        if (q.CreatedFrom is { } cf)
-        {
-            var from = await clock.StartOfDayUtcAsync(cf, ct);
-            query = query.Where(c => c.CreatedAt >= from);
-        }
-        if (q.CreatedTo is { } cto)
-        {
-            var to = await clock.StartOfDayUtcAsync(cto.AddDays(1), ct);
-            query = query.Where(c => c.CreatedAt < to);
-        }
-        if (q.FollowUpFrom is { } ff) query = query.Where(c => c.NextFollowUpDate >= ff);
-        if (q.FollowUpTo is { } ft) query = query.Where(c => c.NextFollowUpDate <= ft);
-        if (q.HasOutstanding is { } owes)
-            query = query.Where(c => db.Bookings.Any(b => b.CustomerId == c.Id && b.Balance > 0) == owes);
+        var query = await FilterAsync(q, ct);
 
         var total = await query.CountAsync(ct);
         var today = await clock.TodayAsync(ct);
@@ -88,6 +54,54 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
             r.LeadSource, r.AssignedUser, r.NextFollowUpDate, r.NextBooking, r.CreatedAt, r.Outstanding)).ToList();
         return new PagedResult<CustomerListItemDto>(items, page, size, total);
     }
+
+    /// <summary>
+    /// Every list filter, combined with AND. Shared by the list and the Excel export, so a
+    /// download always contains exactly what the screen shows.
+    /// </summary>
+    public async Task<IQueryable<Customer>> FilterAsync(CustomerQuery q, CancellationToken ct)
+    {
+        var query = db.Customers.AsNoTracking().Where(c => c.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            var term = q.Search.Trim();
+            var like = $"%{term}%";
+            var handle = $"%{term.TrimStart('@').ToLowerInvariant()}%";
+            // Numbers are stored with the country code, so "050 123" must match "+97150123…".
+            var digits = new string(term.Where(char.IsDigit).ToArray()).TrimStart('0');
+            var digitsLike = $"%{digits}%";
+            query = query.Where(c => EF.Functions.ILike(c.Name, like)
+                                     || (c.InstagramName != null && EF.Functions.Like(c.InstagramName, handle))
+                                     || (digits.Length >= 3 && c.WhatsAppNumber != null && EF.Functions.Like(c.WhatsAppNumber, digitsLike))
+                                     || (digits.Length >= 3 && c.SecondaryPhone != null && EF.Functions.Like(c.SecondaryPhone, digitsLike)));
+        }
+
+        if (q.StageId is { } stageId) query = query.Where(c => c.StageId == stageId);
+        query = FilterConsultation(query, q.Consultation);
+        if (q.TreatmentId is { } treatmentId) query = query.Where(c => c.Treatments.Any(t => t.TreatmentId == treatmentId));
+        if (q.LeadSourceId is { } sourceId) query = query.Where(c => c.LeadSourceId == sourceId);
+        if (q.AssignedUserId is { } userId) query = query.Where(c => c.AssignedUserId == userId);
+        if (q.CreatedFrom is { } cf)
+        {
+            var from = await clock.StartOfDayUtcAsync(cf, ct);
+            query = query.Where(c => c.CreatedAt >= from);
+        }
+        if (q.CreatedTo is { } cto)
+        {
+            var to = await clock.StartOfDayUtcAsync(cto.AddDays(1), ct);
+            query = query.Where(c => c.CreatedAt < to);
+        }
+        if (q.FollowUpFrom is { } ff) query = query.Where(c => c.NextFollowUpDate >= ff);
+        if (q.FollowUpTo is { } ft) query = query.Where(c => c.NextFollowUpDate <= ft);
+        if (q.HasOutstanding is { } owes)
+            query = query.Where(c => db.Bookings.Any(b => b.CustomerId == c.Id && b.Balance > 0) == owes);
+        return query;
+    }
+
+    /// <summary>Consultation state per customer, for the export.</summary>
+    public Task<Dictionary<int, ConsultationDto>> ConsultationsForAsync(IReadOnlyCollection<int> customerIds, CancellationToken ct) =>
+        ConsultationsAsync(customerIds, ct);
 
     // ---- Consultation (worked out from bookings) -------------------------------------------------
 

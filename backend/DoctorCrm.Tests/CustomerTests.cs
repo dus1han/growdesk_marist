@@ -75,6 +75,33 @@ public class CustomerIntegrationTests(ApiFactory factory) : IClassFixture<ApiFac
         new(name, whatsApp, null, instagram, null, stageId, 1, null, treatments ?? [1], null, null, null, customFields);
 
     [Fact]
+    public async Task Export_has_the_filtered_customers_and_money_only_for_payment_users()
+    {
+        var admin = await AdminAsync();
+        var tag = $"Exporter {Guid.NewGuid():N}"[..20];
+        await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers", Customer($"{tag} One", NewNumber())));
+        await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers", Customer($"{tag} Two", NewNumber())));
+
+        using (var file = new ClosedXML.Excel.XLWorkbook(await (await admin.GetAsync($"/api/customers/export?search={Uri.EscapeDataString(tag)}")).Content.ReadAsStreamAsync()))
+        {
+            var sheet = file.Worksheet(1);
+            var headers = sheet.Row(1).CellsUsed().Select(c => c.GetString()).ToList();
+            Assert.Contains("Lead source", headers);
+            Assert.Contains("Outstanding (AED)", headers);
+            Assert.Equal(3, sheet.RowsUsed().Count()); // header + the two matching customers
+            Assert.All(sheet.Column(1).CellsUsed().Skip(1), c => Assert.StartsWith(tag, c.GetString()));
+        }
+
+        var roles = await DataAsync<List<RoleDto>>(await admin.GetAsync("/api/roles"));
+        var username = $"export_staff_{Guid.NewGuid():N}"[..20];
+        await DataAsync<UserDto>(await admin.PostAsJsonAsync("/api/users",
+            new CreateUserRequest("Staff", username, null, roles.Single(r => r.Name == "Staff").Id, "Staff-Pass-1")));
+        var staff = await factory.SignInNewUserAsync(username, "Staff-Pass-1");
+        using var staffFile = new ClosedXML.Excel.XLWorkbook(await (await staff.GetAsync($"/api/customers/export?search={Uri.EscapeDataString(tag)}")).Content.ReadAsStreamAsync());
+        Assert.DoesNotContain("Outstanding (AED)", staffFile.Worksheet(1).Row(1).CellsUsed().Select(c => c.GetString()));
+    }
+
+    [Fact]
     public async Task Lead_source_is_required()
     {
         var admin = await AdminAsync();

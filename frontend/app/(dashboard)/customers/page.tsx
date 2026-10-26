@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CircleAlert, Plus, RotateCcw, Users } from "lucide-react";
+import { CircleAlert, Download, Plus, RotateCcw, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { CustomerFormDrawer } from "@/components/customers/customer-form-drawer";
 import { formatMoney } from "@/components/bookings/booking-status";
 import { CONSULTATION, ConsultationBadge } from "@/components/customers/consultation-badge";
@@ -20,8 +21,10 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCustomerFilters } from "@/hooks/use-customer-filters";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { toastError } from "@/lib/api/admin";
 import { useLocale } from "@/lib/api/bookings";
-import { CUSTOMER_PAGE_SIZE, useActiveLookup, useCustomers, useUserOptions } from "@/lib/api/customers";
+import { downloadFile } from "@/lib/api/client";
+import { CUSTOMER_PAGE_SIZE, toQueryString, useActiveLookup, useCustomers, useUserOptions } from "@/lib/api/customers";
 import { useSession } from "@/lib/auth/session";
 import { CREATED_PRESETS, followUpState, FOLLOW_UP_PRESETS, formatDate } from "@/lib/dates";
 import { can, Permission } from "@/lib/permissions";
@@ -46,6 +49,7 @@ function CustomersView() {
   const showMoney = can(session?.user, Permission.PaymentsView);
   const { values, apiFilters, set, clearAll, activeCount } = useCustomerFilters();
   const [adding, setAdding] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Search box is local state, pushed to the URL after typing pauses.
   const [search, setSearch] = useState(values.q);
@@ -62,17 +66,37 @@ function CustomersView() {
 
   const filtered = activeCount > 0 || !!apiFilters.search;
 
+  /** The customers on screen (search and filters, every page) as an Excel file. */
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      // Every page of the current list: the page number doesn't apply.
+      await downloadFile(`/customers/export?${toQueryString({ ...apiFilters, page: undefined })}`, "customers.xlsx");
+      toast.success(`Exported ${data?.totalCount.toLocaleString() ?? ""} customers to Excel`);
+    } catch (error) {
+      toastError(error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
         title="Customers"
         description="Everyone who has shown interest in a treatment."
         actions={
-          canManage && (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="size-4" /> Add customer
+          <>
+            <Button variant="secondary" onClick={exportExcel} disabled={exporting || !data || data.totalCount === 0}>
+              <Download className="size-4" />
+              <span className="hidden sm:inline">{exporting ? "Exporting…" : `Download Excel${data ? ` (${data.totalCount.toLocaleString()})` : ""}`}</span>
             </Button>
-          )
+            {canManage && (
+              <Button onClick={() => setAdding(true)}>
+                <Plus className="size-4" /> Add customer
+              </Button>
+            )}
+          </>
         }
       />
 

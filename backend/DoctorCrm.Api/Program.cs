@@ -215,6 +215,7 @@ builder.Services.AddScoped<SettingsService>();
 builder.Services.AddSingleton<ContactNormalizer>();
 builder.Services.AddScoped<ClinicClock>();
 builder.Services.AddScoped<CustomerService>();
+builder.Services.AddScoped<CustomerExportService>();
 builder.Services.AddScoped<StageAutomation>();
 builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<BookingExportService>();

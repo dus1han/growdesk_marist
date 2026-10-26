@@ -26,6 +26,15 @@ public class CustomersController(CustomerService customers) : ControllerBase
         return Ok(ApiResponse<PagedResult<CustomerListItemDto>>.Ok(page));
     }
 
+    /// <summary>The filtered list as an Excel workbook (same search and filters as GET /api/customers).</summary>
+    [HttpGet("export")]
+    public async Task<IActionResult> Export([FromQuery] CustomerQuery query, [FromServices] CustomerExportService export, CancellationToken ct)
+    {
+        if (!CanSeePayments) query.HasOutstanding = null;
+        var (bytes, fileName) = await export.CreateAsync(query, CanSeePayments, User.GetUserId(), ct);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+    }
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ApiResponse<CustomerDetailDto>>> Get(int id, CancellationToken ct) =>
         Ok(ApiResponse<CustomerDetailDto>.Ok(await WithoutMoneyUnlessAllowed(customers.GetAsync(id, ct))));
