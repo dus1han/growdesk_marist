@@ -99,6 +99,25 @@ public class CustomerService(AppDbContext db, AuditService audit, ContactNormali
         return query;
     }
 
+    /// <summary>
+    /// Previous and next customer around this one, in the list's order (newest first) with the
+    /// list's filters. Works even if the customer has stopped matching them (e.g. status changed).
+    /// </summary>
+    public async Task<CustomerNeighboursDto> NeighboursAsync(int id, CustomerQuery q, CancellationToken ct)
+    {
+        var current = await db.Customers.AsNoTracking().Where(c => c.Id == id).Select(c => new { c.Id, c.CreatedAt }).SingleOrDefaultAsync(ct)
+            ?? throw BusinessRuleException.NotFound("Customer");
+        var query = await FilterAsync(q, ct);
+        var newer = query.Where(c => c.CreatedAt > current.CreatedAt || (c.CreatedAt == current.CreatedAt && c.Id > current.Id));
+        var older = query.Where(c => c.CreatedAt < current.CreatedAt || (c.CreatedAt == current.CreatedAt && c.Id < current.Id));
+
+        var previous = await newer.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct);
+        var next = await older.OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct);
+        var total = await query.CountAsync(ct);
+        int? position = await query.AnyAsync(c => c.Id == id, ct) ? await newer.CountAsync(ct) + 1 : null;
+        return new CustomerNeighboursDto(previous, next, position, total);
+    }
+
     /// <summary>Consultation state per customer, for the export.</summary>
     public Task<Dictionary<int, ConsultationDto>> ConsultationsForAsync(IReadOnlyCollection<int> customerIds, CancellationToken ct) =>
         ConsultationsAsync(customerIds, ct);

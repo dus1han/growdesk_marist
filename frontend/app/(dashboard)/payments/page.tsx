@@ -37,14 +37,12 @@ type Tab = "received" | "outstanding";
 export default function PaymentsPage() {
   const { data: session } = useSession();
   const canRecord = can(session?.user, Permission.PaymentsManage);
-  const methods = useActiveLookup("payment-methods");
   const sources = useActiveLookup("lead-sources");
 
   const [tab, setTab] = useState<Tab>("received");
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<DateRange>({});
-  const [status, setStatus] = useState<string | undefined>();
-  const [method, setMethod] = useState<string | undefined>();
+  const [leadCreated, setLeadCreated] = useState<DateRange>({});
   const [source, setSource] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [openBooking, setOpenBooking] = useState<number | null>(null);
@@ -56,9 +54,9 @@ export default function PaymentsPage() {
     search: debounced.trim() || undefined,
     from: range.from,
     to: range.to,
-    status,
-    paymentMethodId: method ? Number(method) : undefined,
     leadSourceId: source ? Number(source) : undefined,
+    leadCreatedFrom: leadCreated.from,
+    leadCreatedTo: leadCreated.to,
   };
   const reset = () => setPage(1);
   const switchTab = (next: Tab) => {
@@ -66,11 +64,14 @@ export default function PaymentsPage() {
     setPage(1);
   };
   const received = usePayments({ ...query, page, pageSize: PAGE_SIZE }, tab === "received");
-  const outstanding = useOutstanding({ search: query.search, leadSourceId: query.leadSourceId, page, pageSize: PAGE_SIZE }, tab === "outstanding");
+  const outstanding = useOutstanding(
+    { search: query.search, leadSourceId: query.leadSourceId, leadCreatedFrom: query.leadCreatedFrom, leadCreatedTo: query.leadCreatedTo, page, pageSize: PAGE_SIZE },
+    tab === "outstanding",
+  );
   const summary = usePaymentSummary(query);
   const currency = summary.data?.currency ?? "AED";
   const money = useCallback((n: number) => formatMoney(n, currency), [currency]);
-  const filtered = !!(debounced || range.from || range.to || status || method || source);
+  const filtered = !!(debounced || range.from || range.to || source || leadCreated.from || leadCreated.to);
 
   const exportExcel = async () => {
     setExporting(true);
@@ -189,26 +190,8 @@ export default function PaymentsPage() {
               onChange={(v) => { setSource(v); reset(); }}
               options={sources.data?.map((s) => ({ value: String(s.id), label: s.name })) ?? []}
             />
-            {tab === "received" && (
-              <>
-                <DateRangeFilter value={range} onChange={(r) => { setRange(r); reset(); }} />
-                <FilterMenu
-                  label="Type"
-                  value={status}
-                  onChange={(v) => { setStatus(v); reset(); }}
-                  options={[
-                    { value: "Paid", label: "Received" },
-                    { value: "Waived", label: "Waived" },
-                  ]}
-                />
-                <FilterMenu
-                  label="Method"
-                  value={method}
-                  onChange={(v) => { setMethod(v); reset(); }}
-                  options={methods.data?.map((m) => ({ value: String(m.id), label: m.name })) ?? []}
-                />
-              </>
-            )}
+            <DateRangeFilter label="Lead created" withTime value={leadCreated} onChange={(r) => { setLeadCreated(r); reset(); }} />
+            {tab === "received" && <DateRangeFilter label="Paid on" value={range} onChange={(r) => { setRange(r); reset(); }} />}
           </div>
         </div>
 

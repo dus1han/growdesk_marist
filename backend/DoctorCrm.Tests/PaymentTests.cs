@@ -97,6 +97,26 @@ public class PaymentIntegrationTests(ApiFactory factory) : IClassFixture<ApiFact
     }
 
     [Fact]
+    public async Task Payments_and_outstanding_filter_by_when_the_customer_was_added()
+    {
+        var admin = await AdminAsync();
+        var s = await SeedAsync(admin);
+        // The customer was added just now: a window around now finds them, one before or after does not.
+        var before = DateTime.UtcNow.AddDays(-2).ToString("yyyy-MM-ddTHH:mm");
+        var after = DateTime.UtcNow.AddDays(2).ToString("yyyy-MM-ddTHH:mm");
+        var all = $"customerId={s.Customer.Id}";
+
+        Assert.Equal(2, (await DataAsync<PagedResult<PaymentListItemDto>>(await admin.GetAsync($"/api/payments?{all}&leadCreatedFrom={before}&leadCreatedTo={after}"))).TotalCount);
+        Assert.Equal(0, (await DataAsync<PagedResult<PaymentListItemDto>>(await admin.GetAsync($"/api/payments?{all}&leadCreatedTo={before}"))).TotalCount);
+        Assert.Equal(0, (await DataAsync<PagedResult<PaymentListItemDto>>(await admin.GetAsync($"/api/payments?{all}&leadCreatedFrom={after}"))).TotalCount);
+
+        Assert.Equal(2, (await DataAsync<PagedResult<OutstandingItemDto>>(await admin.GetAsync($"/api/payments/outstanding?{all}&leadCreatedFrom={before}"))).TotalCount);
+        Assert.Equal(0, (await DataAsync<PagedResult<OutstandingItemDto>>(await admin.GetAsync($"/api/payments/outstanding?{all}&leadCreatedFrom={after}"))).TotalCount);
+        var summary = await DataAsync<PaymentSummaryDto>(await admin.GetAsync($"/api/payments/summary?{all}&leadCreatedFrom={after}"));
+        Assert.Equal((0m, 0m), (summary.Collected, summary.Outstanding));
+    }
+
+    [Fact]
     public async Task Paid_more_than_the_amount_or_without_a_method_is_refused()
     {
         var admin = await AdminAsync();

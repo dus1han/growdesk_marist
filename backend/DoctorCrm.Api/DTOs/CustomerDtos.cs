@@ -116,3 +116,9 @@ public record ActivityDto(long Id, string Action, string? UserName, DateTime Cre
 
 /// <summary>Returned with a 409 when a WhatsApp number or Instagram name already belongs to a customer.</summary>
 public record DuplicateCustomerDto(int ExistingCustomerId, string ExistingCustomerName, string MatchedOn);
+
+/// <summary>
+/// The customers either side of one in the filtered list, for Previous / Next on the profile.
+/// Position is 1-based; it is null when the customer no longer matches the filters.
+/// </summary>
+public record CustomerNeighboursDto(int? PreviousId, int? NextId, int? Position, int Total);

@@ -8,6 +8,8 @@ import {
   CalendarPlus,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   Mail,
   Megaphone,
@@ -20,7 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { toast } from "sonner";
 import { BookingDetailsDrawer } from "@/components/bookings/booking-details-drawer";
 import { BookingFormDrawer } from "@/components/bookings/booking-form-drawer";
@@ -43,7 +45,8 @@ import { useLocale } from "@/lib/api/bookings";
 import { useDeleteRecord } from "@/lib/api/recycle-bin";
 import { ApiError } from "@/lib/api/client";
 import { describeActivity } from "@/components/activity/describe-activity";
-import { toSavePayload, useActiveLookup, useCustomer, useCustomerActivity, useSaveCustomer } from "@/lib/api/customers";
+import { toSavePayload, useActiveLookup, useCustomer, useCustomerActivity, useCustomerNeighbours, useSaveCustomer } from "@/lib/api/customers";
+import { useListContext } from "@/hooks/use-customer-filters";
 import { useSession } from "@/lib/auth/session";
 import { followUpState, formatDate } from "@/lib/dates";
 import { formatDateTime, formatRelative } from "@/lib/format";
@@ -55,7 +58,10 @@ export default function CustomerProfilePage() {
   const { id } = useParams<{ id: string }>();
   return (
     <RequirePermission permission={Permission.CustomersView}>
-      <Profile id={Number(id)} />
+      {/* useSearchParams (the list it was opened from) needs a Suspense boundary. */}
+      <Suspense fallback={<ProfileSkeleton />}>
+        <Profile id={Number(id)} />
+      </Suspense>
     </RequirePermission>
   );
 }
@@ -71,6 +77,7 @@ function Profile({ id }: { id: number }) {
   const [booking, setBooking] = useState(false);
   const [openBookingId, setOpenBookingId] = useState<number | null>(null);
   const [followingUp, setFollowingUp] = useState(false);
+  const { listHref } = useListContext();
 
   if (isPending) return <ProfileSkeleton />;
   if (error || !customer) {
@@ -94,9 +101,12 @@ function Profile({ id }: { id: number }) {
 
   return (
     <>
-      <Link href="/customers" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground">
-        <ArrowLeft className="size-4" /> Customers
-      </Link>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Link href={listHref} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground">
+          <ArrowLeft className="size-4" /> Customers
+        </Link>
+        <ListStepper id={customer.id} />
+      </div>
 
       <ProfileHeader
         customer={customer}
@@ -294,6 +304,7 @@ function ProfileHeader({
 function DeleteCustomer({ customer }: { customer: CustomerDetail }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const { listHref } = useListContext();
   const remove = useDeleteRecord("customer");
   if (!can(session?.user, Permission.RecordsDelete)) return null;
   return (
@@ -305,7 +316,7 @@ function DeleteCustomer({ customer }: { customer: CustomerDetail }) {
         remove.mutate(customer.id, {
           onSuccess: () => {
             toast.success(`${customer.name} moved to the recycle bin`);
-            router.push("/customers");
+            router.push(listHref);
           },
         })
       }
@@ -465,6 +476,32 @@ function ActivityCard({ id }: { id: number }) {
         )}
       </div>
     </Card>
+  );
+}
+
+/** Previous / Next through the list this profile was opened from: same filters, same order. */
+function ListStepper({ id }: { id: number }) {
+  const router = useRouter();
+  const { filters, profileHref } = useListContext();
+  const { data } = useCustomerNeighbours(id, filters);
+  if (!data || data.total <= 1) return null;
+  const go = (to: number | null) => to && router.push(profileHref(to));
+  return (
+    <div className="flex items-center gap-1.5">
+      {data.position && (
+        <span className="mr-1 text-xs tabular-nums text-muted">
+          {data.position.toLocaleString()} of {data.total.toLocaleString()}
+        </span>
+      )}
+      <Button variant="secondary" size="sm" onClick={() => go(data.previousId)} disabled={!data.previousId} aria-label="Previous customer">
+        <ChevronLeft className="size-3.5" />
+        <span className="hidden sm:inline">Previous</span>
+      </Button>
+      <Button variant="secondary" size="sm" onClick={() => go(data.nextId)} disabled={!data.nextId} aria-label="Next customer">
+        <span className="hidden sm:inline">Next</span>
+        <ChevronRight className="size-3.5" />
+      </Button>
+    </div>
   );
 }
 

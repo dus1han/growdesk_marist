@@ -39,6 +39,14 @@ public class CustomersController(CustomerService customers) : ControllerBase
     public async Task<ActionResult<ApiResponse<CustomerDetailDto>>> Get(int id, CancellationToken ct) =>
         Ok(ApiResponse<CustomerDetailDto>.Ok(await WithoutMoneyUnlessAllowed(customers.GetAsync(id, ct))));
 
+    /// <summary>Previous / next customer in the filtered list (same search and filters as GET /api/customers).</summary>
+    [HttpGet("{id:int}/neighbours")]
+    public async Task<ActionResult<ApiResponse<CustomerNeighboursDto>>> Neighbours(int id, [FromQuery] CustomerQuery query, CancellationToken ct)
+    {
+        if (!CanSeePayments) query.HasOutstanding = null;
+        return Ok(ApiResponse<CustomerNeighboursDto>.Ok(await customers.NeighboursAsync(id, query, ct)));
+    }
+
     [HttpGet("{id:int}/activity")]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<ActivityDto>>>> Activity(int id, CancellationToken ct) =>
         Ok(ApiResponse<IReadOnlyList<ActivityDto>>.Ok(await customers.ActivityAsync(id, ct)));

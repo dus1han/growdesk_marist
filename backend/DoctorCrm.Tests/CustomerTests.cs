@@ -102,6 +102,29 @@ public class CustomerIntegrationTests(ApiFactory factory) : IClassFixture<ApiFac
     }
 
     [Fact]
+    public async Task Neighbours_step_through_the_filtered_list_newest_first()
+    {
+        var admin = await AdminAsync();
+        var tag = $"Stepper {Guid.NewGuid():N}"[..20];
+        var one = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers", Customer($"{tag} One", NewNumber())));
+        var two = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers", Customer($"{tag} Two", NewNumber())));
+        var three = await DataAsync<CustomerDetailDto>(await admin.PostAsJsonAsync("/api/customers", Customer($"{tag} Three", NewNumber())));
+        var filter = $"search={Uri.EscapeDataString(tag)}";
+
+        // The list shows Three, Two, One.
+        var middle = await DataAsync<CustomerNeighboursDto>(await admin.GetAsync($"/api/customers/{two.Id}/neighbours?{filter}"));
+        Assert.Equal(new CustomerNeighboursDto(three.Id, one.Id, 2, 3), middle);
+        var first = await DataAsync<CustomerNeighboursDto>(await admin.GetAsync($"/api/customers/{three.Id}/neighbours?{filter}"));
+        Assert.Equal(new CustomerNeighboursDto(null, two.Id, 1, 3), first);
+        var last = await DataAsync<CustomerNeighboursDto>(await admin.GetAsync($"/api/customers/{one.Id}/neighbours?{filter}"));
+        Assert.Equal(new CustomerNeighboursDto(two.Id, null, 3, 3), last);
+
+        // A customer outside the filter still gets neighbours, without a position.
+        var outside = await DataAsync<CustomerNeighboursDto>(await admin.GetAsync($"/api/customers/{two.Id}/neighbours?{filter}%20One"));
+        Assert.Equal((null as int?, 1), (outside.Position, outside.Total));
+    }
+
+    [Fact]
     public async Task Lead_source_is_required()
     {
         var admin = await AdminAsync();

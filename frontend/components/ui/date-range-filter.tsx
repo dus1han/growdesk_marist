@@ -4,10 +4,12 @@ import * as Popover from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
 import { useState } from "react";
-import { addDays, formatDate, isoDate, today, type DateRange } from "@/lib/dates";
+import { addDays, formatDate, formatDateTime, isoDate, today, type DateRange } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 export interface RangePreset {
+  /** Set when the caller stores the preset itself (it keeps rolling), not just its dates. */
+  key?: string;
   label: string;
   range: () => DateRange;
 }
@@ -59,11 +61,19 @@ export const FUTURE_PRESETS: RangePreset[] = [
 ];
 
 function describe(r: DateRange) {
-  if (r.from && r.to) return r.from === r.to ? formatDate(r.from) : `${formatDate(r.from)} – ${formatDate(r.to)}`;
-  if (r.from) return `From ${formatDate(r.from)}`;
-  if (r.to) return `Until ${formatDate(r.to)}`;
+  // "2026-10-01" or, with a time, "2026-10-01T09:00".
+  const f = (v: string) => (v.length > 10 ? formatDateTime(v) : formatDate(v));
+  if (r.from && r.to) return r.from === r.to ? f(r.from) : `${f(r.from)} – ${f(r.to)}`;
+  if (r.from) return `From ${f(r.from)}`;
+  if (r.to) return `Until ${f(r.to)}`;
   return "";
 }
+
+/** A preset's whole days as date-times: from the start of the first to the last minute of the last. */
+const wholeDays = (r: DateRange): DateRange => ({
+  from: r.from && `${r.from}T00:00`,
+  to: r.to && `${r.to}T23:59`,
+});
 
 /** A date-range pill with quick presets and custom from/to dates. */
 export function DateRangeFilter({
@@ -72,11 +82,20 @@ export function DateRangeFilter({
   onChange,
   presets = PAST_PRESETS,
   min,
+  activeLabel,
+  onPreset,
+  withTime = false,
 }: {
   label?: string;
   value: DateRange;
   onChange: (r: DateRange) => void;
   presets?: RangePreset[];
+  /** Shown instead of the dates while a rolling preset is selected (e.g. "Due today"). */
+  activeLabel?: string;
+  /** Receives the preset clicked; without it the preset's dates go to onChange. */
+  onPreset?: (p: RangePreset) => void;
+  /** Pick a date and time ("YYYY-MM-DDTHH:mm") instead of just a date. */
+  withTime?: boolean;
   /** Earliest date the custom inputs allow (e.g. today for upcoming bookings). */
   min?: string;
 }) {
@@ -93,7 +112,7 @@ export function DateRangeFilter({
       >
         <Popover.Trigger className="flex h-full items-center gap-1.5 rounded-xl pl-3 pr-2.5 font-medium">
           <CalendarRange className="size-3.5" />
-          <span className="whitespace-nowrap">{set ? describe(value) : label}</span>
+          <span className="whitespace-nowrap">{set ? (activeLabel ?? describe(value)) : label}</span>
           {!set && <ChevronDown className="size-3.5 text-muted" />}
         </Popover.Trigger>
         {set && (
@@ -111,7 +130,7 @@ export function DateRangeFilter({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.98 }}
                 transition={{ duration: 0.14 }}
-                className="z-50 w-72 rounded-xl border border-line bg-surface p-2 shadow-pop"
+                className={cn("z-50 rounded-xl border border-line bg-surface p-2 shadow-pop", withTime ? "w-80" : "w-72")}
               >
                 <div className="grid grid-cols-2 gap-1">
                   {presets.map((p) => (
@@ -119,7 +138,8 @@ export function DateRangeFilter({
                       key={p.label}
                       type="button"
                       onClick={() => {
-                        onChange(p.range());
+                        if (onPreset) onPreset(p);
+                        else onChange(withTime ? wholeDays(p.range()) : p.range());
                         setOpen(false);
                       }}
                       className="rounded-lg px-2.5 py-2 text-left text-sm hover:bg-surface-muted"
@@ -128,11 +148,11 @@ export function DateRangeFilter({
                     </button>
                   ))}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-3">
+                <div className={cn("mt-2 grid gap-2 border-t border-line pt-3", withTime ? "grid-cols-1" : "grid-cols-2")}>
                   <label className="text-xs font-medium text-muted">
                     From
                     <input
-                      type="date"
+                      type={withTime ? "datetime-local" : "date"}
                       value={value.from ?? ""}
                       min={min}
                       max={value.to}
@@ -143,7 +163,7 @@ export function DateRangeFilter({
                   <label className="text-xs font-medium text-muted">
                     To
                     <input
-                      type="date"
+                      type={withTime ? "datetime-local" : "date"}
                       value={value.to ?? ""}
                       min={value.from ?? min}
                       onChange={(e) => onChange({ ...value, to: e.target.value || undefined })}

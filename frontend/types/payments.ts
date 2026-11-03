@@ -48,6 +48,9 @@ export interface PaymentQuery {
   paymentMethodId?: number;
   customerId?: number;
   leadSourceId?: number;
+  /** When the customer was added, clinic-local "YYYY-MM-DDTHH:mm". */
+  leadCreatedFrom?: string;
+  leadCreatedTo?: string;
   search?: string;
   page?: number;
   pageSize?: number;

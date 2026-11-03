@@ -37,7 +37,14 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
             .GroupBy(_ => 1).Select(g => new { Sum = g.Sum(p => p.Amount), Count = g.Count() }).FirstOrDefaultAsync(ct);
 
         // Outstanding: every balance still owed today, whatever the range.
-        var owed = FilterOutstanding(new OutstandingQuery { CustomerId = q.CustomerId, LeadSourceId = q.LeadSourceId, Search = q.Search });
+        var owed = await FilterOutstandingAsync(new OutstandingQuery
+        {
+            CustomerId = q.CustomerId,
+            LeadSourceId = q.LeadSourceId,
+            LeadCreatedFrom = q.LeadCreatedFrom,
+            LeadCreatedTo = q.LeadCreatedTo,
+            Search = q.Search,
+        }, ct);
         var outstanding = await owed.GroupBy(_ => 1).Select(g => new { Sum = g.Sum(b => b.Balance), Count = g.Count() }).FirstOrDefaultAsync(ct);
 
         var currency = (await settings.GetAsync(ct)).Currency;
@@ -53,7 +60,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
     {
         var page = Math.Max(1, q.Page);
         var size = Math.Clamp(q.PageSize, 1, 200);
-        var query = FilterOutstanding(q);
+        var query = await FilterOutstandingAsync(q, ct);
         var total = await query.CountAsync(ct);
         var items = await query
             .OrderBy(b => b.BookingDate).ThenBy(b => b.StartTime).ThenBy(b => b.Id)
@@ -142,11 +149,14 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
         return booking;
     }
 
-    private IQueryable<Booking> FilterOutstanding(OutstandingQuery q)
+    private async Task<IQueryable<Booking>> FilterOutstandingAsync(OutstandingQuery q, CancellationToken ct)
     {
         var query = db.Bookings.AsNoTracking().Where(b => b.Balance > 0);
         if (q.CustomerId is { } customerId) query = query.Where(b => b.CustomerId == customerId);
         if (q.LeadSourceId is { } sourceId) query = query.Where(b => b.Customer.LeadSourceId == sourceId);
+        var (createdFrom, createdBefore) = await LeadCreatedAsync(q.LeadCreatedFrom, q.LeadCreatedTo, ct);
+        if (createdFrom is { } cf) query = query.Where(b => b.Customer.CreatedAt >= cf);
+        if (createdBefore is { } cb) query = query.Where(b => b.Customer.CreatedAt < cb);
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
             var (like, handle, digits, digitsLike) = SearchTerms(q.Search);
@@ -156,6 +166,11 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
         }
         return query;
     }
+
+    /// <summary>The lead-created filter as UTC bounds: from (inclusive) and before (exclusive; "to" includes its whole minute).</summary>
+    private async Task<(DateTime? From, DateTime? Before)> LeadCreatedAsync(DateTime? from, DateTime? to, CancellationToken ct) =>
+        (from is { } f ? await clock.ToUtcAsync(f, ct) : null,
+         to is { } t ? await clock.ToUtcAsync(t.AddMinutes(1), ct) : null);
 
     private static (string Like, string Handle, string Digits, string DigitsLike) SearchTerms(string search)
     {
@@ -220,7 +235,7 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
-        audit.Record(userId, "Payments Exported", nameof(Payment), null, new { rows = rows.Count, q.From, q.To, q.Status, q.LeadSourceId });
+        audit.Record(userId, "Payments Exported", nameof(Payment), null, new { rows = rows.Count, q.From, q.To, q.LeadSourceId, q.LeadCreatedFrom, q.LeadCreatedTo });
         await db.SaveChangesAsync(ct);
         return (stream.ToArray(), $"payments-{DateTime.UtcNow:yyyy-MM-dd-HHmm}.xlsx");
     }
@@ -233,6 +248,9 @@ public class PaymentService(AppDbContext db, AuditService audit, ClinicClock clo
         if (q.PaymentMethodId is { } methodId) query = query.Where(p => p.PaymentMethodId == methodId);
         if (q.CustomerId is { } customerId) query = query.Where(p => p.CustomerId == customerId);
         if (q.LeadSourceId is { } sourceId) query = query.Where(p => p.Customer.LeadSourceId == sourceId);
+        var (createdFrom, createdBefore) = await LeadCreatedAsync(q.LeadCreatedFrom, q.LeadCreatedTo, ct);
+        if (createdFrom is { } cf) query = query.Where(p => p.Customer.CreatedAt >= cf);
+        if (createdBefore is { } cb) query = query.Where(p => p.Customer.CreatedAt < cb);
         if (includeDates && q.From is { } from)
         {
             var start = await clock.StartOfDayUtcAsync(from, ct);

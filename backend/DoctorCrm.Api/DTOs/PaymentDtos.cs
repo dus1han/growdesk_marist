@@ -12,6 +12,9 @@ public record PaymentQuery
     public int? CustomerId { get; set; }
     /// <summary>The customer's lead source.</summary>
     public int? LeadSourceId { get; set; }
+    /// <summary>When the customer (lead) was added: clinic-local date and time, both inclusive to the minute.</summary>
+    public DateTime? LeadCreatedFrom { get; set; }
+    public DateTime? LeadCreatedTo { get; set; }
     /// <summary>Customer name, WhatsApp number or Instagram name.</summary>
     public string? Search { get; set; }
     public int Page { get; set; } = 1;
@@ -54,6 +57,8 @@ public record OutstandingQuery
 {
     public int? CustomerId { get; set; }
     public int? LeadSourceId { get; set; }
+    public DateTime? LeadCreatedFrom { get; set; }
+    public DateTime? LeadCreatedTo { get; set; }
     public string? Search { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 25;

@@ -129,3 +129,11 @@ export interface CustomerFilters {
   hasOutstanding?: boolean;
   page?: number;
 }
+
+/** Previous / next customer in the filtered list. Position is null when this one no longer matches. */
+export interface CustomerNeighbours {
+  previousId: number | null;
+  nextId: number | null;
+  position: number | null;
+  total: number;
+}

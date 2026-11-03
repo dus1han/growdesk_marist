@@ -3,7 +3,7 @@
 import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import type { CustomField, LookupItem } from "@/types/admin";
-import type { Activity, CustomerDetail, CustomerFilters, CustomerListItem, NamedRef, Paged, SaveCustomer } from "@/types/customers";
+import type { Activity, CustomerDetail, CustomerFilters, CustomerListItem, CustomerNeighbours, NamedRef, Paged, SaveCustomer } from "@/types/customers";
 
 export const CUSTOMER_PAGE_SIZE = 20;
 
@@ -59,6 +59,15 @@ export function useCustomer(id: number) {
   return useQuery({
     queryKey: ["customers", "detail", id],
     queryFn: ({ signal }) => api.get<CustomerDetail>(`/customers/${id}`, { signal }),
+    enabled: Number.isFinite(id),
+  });
+}
+
+/** Previous / next customer around this one, with the list's filters. */
+export function useCustomerNeighbours(id: number, filters: CustomerFilters) {
+  return useQuery({
+    queryKey: ["customers", "neighbours", id, filters],
+    queryFn: ({ signal }) => api.get<CustomerNeighbours>(`/customers/${id}/neighbours?${toQueryString(filters)}`, { signal }),
     enabled: Number.isFinite(id),
   });
 }

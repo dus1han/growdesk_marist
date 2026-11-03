@@ -28,6 +28,8 @@ export function usePaymentSummary(q: PaymentQuery, enabled = true) {
     paymentMethodId: q.paymentMethodId,
     customerId: q.customerId,
     leadSourceId: q.leadSourceId,
+    leadCreatedFrom: q.leadCreatedFrom,
+    leadCreatedTo: q.leadCreatedTo,
     search: q.search,
   };
   return useQuery({
@@ -40,7 +42,7 @@ export function usePaymentSummary(q: PaymentQuery, enabled = true) {
 
 /** Completed consultations still owed money, oldest first. */
 export function useOutstanding(
-  q: { customerId?: number; leadSourceId?: number; search?: string; page?: number; pageSize?: number },
+  q: Pick<PaymentQuery, "customerId" | "leadSourceId" | "leadCreatedFrom" | "leadCreatedTo" | "search" | "page" | "pageSize">,
   enabled = true,
 ) {
   return useQuery({

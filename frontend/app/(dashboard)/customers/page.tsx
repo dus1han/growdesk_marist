@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { CircleAlert, Download, Plus, RotateCcw, Users } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CustomerFormDrawer } from "@/components/customers/customer-form-drawer";
@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { RequirePermission } from "@/components/layout/require-permission";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DateRangeFilter, type RangePreset } from "@/components/ui/date-range-filter";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterMenu } from "@/components/ui/filter-menu";
 import { Pagination } from "@/components/ui/pagination";
@@ -26,7 +27,7 @@ import { useLocale } from "@/lib/api/bookings";
 import { downloadFile } from "@/lib/api/client";
 import { CUSTOMER_PAGE_SIZE, toQueryString, useActiveLookup, useCustomers, useUserOptions } from "@/lib/api/customers";
 import { useSession } from "@/lib/auth/session";
-import { CREATED_PRESETS, followUpState, FOLLOW_UP_PRESETS, formatDate } from "@/lib/dates";
+import { CREATED_PRESETS, followUpState, FOLLOW_UP_PRESETS, formatDate, parseRangeParam, rangeParam, type DatePreset } from "@/lib/dates";
 import { can, Permission } from "@/lib/permissions";
 import { cn, initials } from "@/lib/utils";
 import type { CustomerListItem } from "@/types/customers";
@@ -42,8 +43,37 @@ export default function CustomersPage() {
   );
 }
 
+/** A date filter kept in the URL: a rolling preset, or custom From/To dates. */
+function DateFilter({
+  label,
+  value,
+  presets,
+  onChange,
+}: {
+  label: string;
+  value: string | undefined;
+  presets: Record<string, DatePreset>;
+  onChange: (v: string | undefined) => void;
+}) {
+  const { range, preset } = parseRangeParam(value, presets);
+  const options: RangePreset[] = Object.entries(presets).map(([key, p]) => ({ key, ...p }));
+  return (
+    <DateRangeFilter
+      label={label}
+      value={range}
+      presets={options}
+      activeLabel={preset?.label}
+      onPreset={(p) => onChange(p.key)}
+      onChange={(r) => onChange(rangeParam(r))}
+    />
+  );
+}
+
 function CustomersView() {
   const router = useRouter();
+  const listParams = useSearchParams().toString();
+  // The profile gets the list's filters, for Previous / Next and the way back.
+  const openCustomer = (id: number) => router.push(listParams ? `/customers/${id}?list=${encodeURIComponent(listParams)}` : `/customers/${id}`);
   const { data: session } = useSession();
   const canManage = can(session?.user, Permission.CustomersManage);
   const showMoney = can(session?.user, Permission.PaymentsView);
@@ -137,18 +167,8 @@ function CustomersView() {
               onChange={(v) => set("assigned", v)}
               options={users.data?.map((u) => ({ value: String(u.id), label: u.name })) ?? []}
             />
-            <FilterMenu
-              label="Created"
-              value={values.created}
-              onChange={(v) => set("created", v)}
-              options={Object.entries(CREATED_PRESETS).map(([k, p]) => ({ value: k, label: p.label }))}
-            />
-            <FilterMenu
-              label="Follow-up"
-              value={values.followup}
-              onChange={(v) => set("followup", v)}
-              options={Object.entries(FOLLOW_UP_PRESETS).map(([k, p]) => ({ value: k, label: p.label }))}
-            />
+            <DateFilter label="Created" value={values.created} presets={CREATED_PRESETS} onChange={(v) => set("created", v)} />
+            <DateFilter label="Follow-up" value={values.followup} presets={FOLLOW_UP_PRESETS} onChange={(v) => set("followup", v)} />
             {showMoney && (
               <FilterMenu
                 label="Payment"
@@ -194,8 +214,8 @@ function CustomersView() {
           />
         ) : (
           <div className={cn("transition-opacity", isFetching && "opacity-70")}>
-            <CustomerTable items={data.items} onOpen={(id) => router.push(`/customers/${id}`)} showMoney={showMoney} />
-            <CustomerCards items={data.items} onOpen={(id) => router.push(`/customers/${id}`)} />
+            <CustomerTable items={data.items} onOpen={openCustomer} showMoney={showMoney} />
+            <CustomerCards items={data.items} onOpen={openCustomer} />
             <Pagination
               page={data.page}
               pageSize={CUSTOMER_PAGE_SIZE}
